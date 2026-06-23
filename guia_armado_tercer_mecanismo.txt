@@ -1,353 +1,283 @@
 ================================================================================
-GUIA DE ARMADO - TERCER MECANISMO DE 4 BARRAS PARA ARTICULACION DIP
-Exoesqueleto de Rehabilitacion de Mano
+GUIA DE ARMADO EN CAD - TERCER MECANISMO DE 4 BARRAS (ARTICULACION IFD/DIP)
+Exoesqueleto de Rehabilitacion de Mano - Montaje DORSAL
 ================================================================================
+
+IMPORTANTE: Esta guia describe el diseno DORSAL actual (commit con back3=-12,
+up3=2). Todo el hardware del tercer mecanismo (soporte Pa, acoplador L9,
+balancin L10 y punto D3) va por el DORSO del dedo -el mismo lado que los
+mecanismos 1 y 2- para NO chocar con la palma al cerrar el puno. Aun asi, la
+geometria del 4 barras hace que la falange distal FLEXIONE hacia la palma de
+forma gradual, como un dedo natural (0 -> ~15.6 grados de flexion relativa).
 
 INDICE:
-  1. Descripcion General
-  2. Lista Completa de Dimensiones
-  3. Descripcion de Articulaciones y Puntos
-  4. Guia de Armado Paso a Paso
-  5. Coordenadas de Referencia (Posicion Extendida)
-  6. Restricciones y Notas Importantes
-  7. Conexion del Tercer Mecanismo con el Segundo
-  8. Ajustes Realizados
+  1. Descripcion general y topologia del tercer mecanismo
+  2. Lista completa de dimensiones
+  3. Definicion de puntos y articulaciones
+  4. Coordenadas de referencia en reposo (para arrancar el CAD)
+  5. Guia de modelado/armado en CAD paso a paso
+  6. Restricciones (constraints) y verificacion de movimiento
+  7. Como comparar el CAD contra los scripts de validacion
+  8. Notas, holguras y ajustes permitidos
 
 ================================================================================
-1. DESCRIPCION GENERAL
+1. DESCRIPCION GENERAL Y TOPOLOGIA DEL TERCER MECANISMO
 ================================================================================
 
-El exoesqueleto cuenta con tres etapas de mecanismos:
+El exoesqueleto tiene tres etapas:
 
-  ETAPA 1 (Mecanismo 5B + 4B): Controla la falange proximal (articulacion MCP)
-  ETAPA 2 (Mecanismo 5B + 4B): Controla la falange medial (articulacion PIP)
-  ETAPA 3 (Mecanismo 4B - NUEVO): Controla la falange distal (articulacion DIP)
+  ETAPA 1 (5B + 4B): controla la falange proximal (articulacion MCP)
+  ETAPA 2 (5B + 4B): controla la falange medial  (articulacion IFP)
+  ETAPA 3 (4B - NUEVO): controla la falange distal (articulacion IFD/DIP)
 
-El tercer mecanismo reemplaza la union rigida original (angulo constante de
+El tercer mecanismo REEMPLAZA la union rigida original (offset constante de
 38.78 grados entre falange medial y distal) por un mecanismo de 4 barras que
-proporciona movimiento VARIABLE e INDEPENDIENTE a la falange distal.
+da movimiento VARIABLE e INDEPENDIENTE a la falange distal.
 
-PRINCIPIO DE FUNCIONAMIENTO:
-- El segundo mecanismo calcula la posicion del punto P3 (que se mueve)
-- P3 esta conectado mediante Link9 (acoplador, 25mm) a un punto D3
-- D3 esta ubicado sobre la falange distal a una distancia Link10 (35mm) de IFD
-- El lazo cerrado P3-Link9-D3-Link10-IFD determina el angulo de la falange distal
-- El resultado es un angulo DIP variable que depende de la posicion del mecanismo
+TOPOLOGIA DEL TERCER 4 BARRAS (4 pivotes de revoluta: Pa, IFP, IFD, D3):
+
+      Pa  o--------------------o  IFP        <- TIERRA (sobre falange proximal)
+          \                    |
+   L9=25   \  (acoplador)      | fm=26 mm    <- ENTRADA: la propia falange
+            \                  |   (manivela)    medial gira en la IFP
+             \                 |
+              o D3 ------------ o IFD
+                  L10=35 (balancin, rigido con la falange distal)
+
+  - TIERRA:    Pa -> IFP     | barra rigida sobre la falange PROXIMAL
+               (longitud ~= 12.17 mm; Pa esta fijo a la falange proximal)
+  - MANIVELA:  IFP -> IFD    | es la PROPIA falange medial (fm = 26 mm).
+               La mueve el segundo mecanismo (no es un eslabon nuevo).
+  - BALANCIN:  IFD -> D3     | Link10 = 35 mm, RIGIDO con la falange distal.
+  - ACOPLADOR: D3 -> Pa      | Link9 = 25 mm, por el lado DORSAL.
+
+La falange distal (fd = 24 mm) NO es colineal con el balancin: forma con el
+balancin IFD->D3 un angulo fijo de ~161 grados (offset rigido). Es decir, en
+la IFD hay una pieza rigida en forma de "L abierta": un brazo es la falange
+distal (24 mm, hacia la punta) y el otro es el balancin L10 (35 mm, hacia el
+dorso). El acoplador L9 une la punta de ese balancin (D3) con el soporte Pa.
+
+PRINCIPIO: al flexionar la IFP, la falange medial gira; como Pa esta fijo a la
+falange proximal, el lazo cerrado obliga al balancin (y por tanto a la falange
+distal) a girar, produciendo la flexion gradual de la IFD.
 
 ================================================================================
 2. LISTA COMPLETA DE DIMENSIONES
 ================================================================================
 
 --- PARAMETROS ORIGINALES (sin modificar) ---
+  Bancada1   = 18 mm     (ancho bancada principal del 1er 5B; r3 = 9 mm)
+  Bancada2   = 20 mm     (distancia vertical bancada del 1er 4B)
+  Link1      = 35 mm     Link2 = 49 mm   Link3 = 25 mm   Link4 = 20 mm
+  Link5      = 25 mm     Link6 = 55 mm   Link7 = 35 mm   Link8 = 52 mm
+  c2         = 46.01 mm  (IFP -> P3, balancin del 2do 4B)
+  hsp        = 17 mm     (altura soportes S1/S2 sobre falange proximal)
+  dsp        = 18 mm     (distancia S1 a la articulacion MCF)
+  fp         = 49 mm     (falange proximal)
+  fm         = 26 mm     (falange medial)
+  fd         = 24 mm     (falange distal)
+  THETAauxfm = 51.39 deg (angulo auxiliar falange medial)
+  THETAauxfd = 38.78 deg (offset distal en REPOSO; ya NO es constante)
+  reng       = 2         (relacion de engranaje entre manivelas)
+  THETA1ini  = 109 deg   (angulo inicial de la manivela del 4B)
 
-  Bancada1        = 18 mm    (ancho de la bancada principal del 1er 5B)
-  Bancada2        = 20 mm    (distancia vertical de la bancada del 1er 4B)
-  Link1           = 35 mm    (eslabon 1 del primer mecanismo de 5 barras)
-  Link2           = 49 mm    (eslabon 2 del primer mecanismo de 5 barras)
-  Link3           = 25 mm    (eslabon 3 del primer mecanismo de 5 barras)
-  Link4           = 20 mm    (manivela compartida entre 5B y 4B)
-  Link5           = 25 mm    (eslabon 5 - balancin del primer 4B)
-  Link6           = 55 mm    (eslabon 6 del segundo mecanismo de 5 barras)
-  Link7           = 35 mm    (manivela del segundo mecanismo de 4 barras)
-  Link8           = 52 mm    (acoplador del segundo mecanismo de 4 barras)
-  c2              = 46.01 mm (distancia de IFP a P3 - balancin del 2do 4B)
-  hsp             = 17 mm    (altura de soportes sobre falange proximal)
-  dsp             = 18 mm    (distancia del soporte S1 a la art. MCF)
-  fp              = 49 mm    (longitud de la falange proximal)
-  fm              = 26 mm    (longitud de la falange medial)
-  fd              = 24 mm    (longitud de la falange distal)
-  THETAauxfm      = 51.39 grados (angulo auxiliar falange medial)
-  THETAauxfd      = 38.78 grados (angulo auxiliar referencia - ya NO constante)
-  Relacion engr.  = 2        (relacion de engranaje entre manivelas)
-  THETA1inicial   = 109 grados (angulo inicial de la manivela del 4B)
+--- TERCER MECANISMO (montaje DORSAL) ---
+  Link9      = 25 mm     (acoplador D3 -> Pa)            [valor del disenador]
+  Link10     = 35 mm     (balancin  IFD -> D3)           [valor del disenador]
+  back3      = -12 mm    (posicion de Pa a lo largo de la falange proximal;
+                          NEGATIVO = Pa se adelanta pasando la IFP)
+  up3        = 2 mm      (standoff DORSAL de Pa, perpendicular a la proximal)
 
---- PARAMETROS NUEVOS (Tercer Mecanismo) ---
+--- DERIVADAS DEL TERCER MECANISMO (en reposo, para referencia) ---
+  Tierra |Pa - IFP|        ~= 12.17 mm
+  Distancia |Pa - IFD|     ~= 15.65 mm (varia con el movimiento)
+  Angulo balancin-falange  ~= 161 deg (offset rigido fijo en la pieza distal)
+  Desigualdad triangular:  |L10 - L9| < |Pa-IFD| < L10 + L9
+                           => 10 mm < |Pa-IFD| < 60 mm  (se cumple en todo el rango)
 
-  Link9           = 25 mm    (acoplador del tercer mecanismo de 4 barras)
-  Link10          = 35 mm    (balancin del tercer mecanismo de 4 barras)
-  hsp3            = 12 mm    (altura del soporte S3 sobre la falange medial)
-  dsp3            = 8 mm     (distancia de S3 desde IFD hacia IFP)
-  d3_frame        = 14.42 mm (= sqrt(12^2 + 8^2), hipotenusa S3 a IFD)
-
---- DIMENSIONES DERIVADAS ---
-
+--- DERIVADAS DE LOS MECANISMOS 1 y 2 ---
   c (hipotenusa S1) = sqrt(17^2 + 18^2) = 24.76 mm
   rs2 (dist. S2)    = sqrt(17^2 + 31^2) = 35.36 mm
-  r1m2 (dist S1-S2) = 49 - 2*18 = 13 mm
-  r3m2 (mitad L5)   = 25/2 = 12.5 mm
+  r1m2 (S1-S2)      = fp - 2*dsp = 13 mm
+  r3m2 (mitad L5)   = 12.5 mm
 
 ================================================================================
-3. DESCRIPCION DE ARTICULACIONES Y PUNTOS
+3. DEFINICION DE PUNTOS Y ARTICULACIONES
 ================================================================================
 
-  MCF  - Articulacion metacarpofalangica (base del dedo)
-         Tipo: Revoluta. Punto fijo del marco de referencia.
-         Posicion: (-9, -20) mm respecto al origen
+  MCF  - Metacarpofalangica (base del dedo). Revoluta. Punto fijo del marco.
+  IFP  - Interfalangica proximal (proximal/medial). Revoluta. A fp=49 de MCF.
+  IFD  - Interfalangica distal (medial/distal). Revoluta. A fm=26 de IFP.
+  S1   - Soporte 1 sobre falange proximal (1er 4B). Fijo. A 24.76 mm de MCF.
+  S2   - Soporte 2 sobre falange proximal. Fijo. A 35.36 mm de MCF.
+  P    - Acoplador del 1er 5B (movil).
+  P2   - Acoplador del 2do 5B (movil).
+  P3   - Salida del 2do 4B (movil). A c2=46.01 de IFP. (Solo del 2do mecanismo;
+         el tercer mecanismo NO se conecta a P3 en el diseno dorsal actual.)
 
-  IFP  - Articulacion interfalangica proximal (entre proximal y medial)
-         Tipo: Revoluta. Se mueve con la falange proximal.
-         Distancia desde MCF: fp = 49 mm
-
-  IFD  - Articulacion interfalangica distal (entre medial y distal)
-         Tipo: Revoluta. Se mueve con la falange medial.
-         Distancia desde IFP: fm = 26 mm
-
-  S1   - Soporte 1 sobre la falange proximal (primer soporte del 4B)
-         Tipo: Punto fijo en falange proximal.
-         Distancia desde MCF: sqrt(hsp^2 + dsp^2) = 24.76 mm
-         A hsp=17mm de altura y dsp=18mm de distancia horizontal de MCF
-
-  S2   - Soporte 2 sobre la falange proximal (segundo soporte)
-         Tipo: Punto fijo en falange proximal.
-         Distancia desde MCF: sqrt(17^2 + 31^2) = 35.36 mm
-         A hsp=17mm de altura y (fp-dsp)=31mm de distancia horizontal de MCF
-
-  S3   - Soporte 3 sobre la falange medial (NUEVO - tercer mecanismo)
-         Tipo: Punto fijo en falange medial. Se mueve con ella.
-         A hsp3=12mm de altura sobre la falange medial
-         A dsp3=8mm de IFD hacia la direccion de IFP
-         Distancia desde IFD: sqrt(12^2 + 8^2) = 14.42 mm
-
-  P    - Punto acoplador del primer mecanismo de 5 barras
-         Tipo: Punto movil (articulacion del acoplador)
-
-  P2   - Punto acoplador del segundo mecanismo de 5 barras
-         Tipo: Punto movil
-
-  P3   - Punto de salida del segundo mecanismo de 4 barras
-         Tipo: Punto movil. ENTRADA del tercer mecanismo.
-         Distancia desde IFP: c2 = 46.01 mm (a lo largo del balancin)
-         Este punto se mueve a medida que el mecanismo opera.
-
-  D3   - Punto de conexion del tercer mecanismo en la falange distal (NUEVO)
-         Tipo: Punto fijo en falange distal. Se mueve con ella.
-         Distancia desde IFD: Link10 = 35 mm
-         Angulo respecto a IFD: determinado por el tercer 4B (variable)
-
-  M4   - Extremo de la manivela Link4
-         Tipo: Punto movil (extremo de la manivela de entrada)
-
-  Origen - Centro de la bancada del primer mecanismo de 5 barras
-           Posicion: (0, 0) mm
+  --- Puntos NUEVOS del tercer mecanismo (DORSAL) ---
+  Pa   - Pivote del acoplador, FIJO a la falange PROXIMAL (soporte S3).
+         Respecto a IFP: 12 mm ADELANTE a lo largo de la falange proximal
+         (en direccion a la punta) y 2 mm hacia el DORSO. |Pa-IFP| ~= 12.17 mm.
+         OJO: Pa va fijo a la falange proximal pero queda fisicamente por
+         encima de la base de la falange medial (en voladizo, 2 mm dorsal).
+  D3   - Punta del balancin L10. RIGIDO con la falange distal. A 35 mm de IFD,
+         por el DORSO. El angulo IFD->D3 respecto a la falange distal es ~161 deg.
 
 ================================================================================
-4. GUIA DE ARMADO PASO A PASO
+4. COORDENADAS DE REFERENCIA EN REPOSO (THETA2 = 0; para arrancar el CAD)
 ================================================================================
 
-NOTA: Todos los mecanismos se montan SOBRE el dedo (parte superior/dorsal).
-      Las alturas hsp y hsp3 son medidas HACIA ARRIBA desde el eje del dedo.
+Valores calculados con la cinematica real (unidades en mm). Sirven para situar
+los sketches iniciales; el movimiento exacto lo da la simulacion del CAD.
 
---- PASO 1: Preparar la estructura de la falange proximal ---
+  MCF = (-9.00, -20.00)
+  IFP = (-58.00, -20.53)
+  IFD = (-83.12, -27.23)
+  D3  = (-72.72,   6.19)
+  Pa  = (-70.02, -18.66)
+  PF  = (-97.33, -46.57)   (punta del dedo)
 
-  1.1 Cortar la falange proximal de fp=49mm de largo
-  1.2 Marcar la posicion de MCF en un extremo
-  1.3 Marcar S1 a dsp=18mm de MCF, a hsp=17mm de altura SOBRE la falange
-  1.4 Marcar S2 a (fp-dsp)=31mm de MCF, a hsp=17mm de altura SOBRE la falange
-  1.5 Marcar IFP al otro extremo (a 49mm de MCF)
+  Angulos en reposo:
+    THETAfp (proximal absoluto) = 180.62 deg
+    THETAfm (medial absoluto)   = 194.92 deg
+    THETAfd (distal absoluto)   = 233.70 deg
+    Angulo del balancin IFD->D3 = 72.71 deg
 
---- PASO 2: Montar la bancada principal ---
-
-  2.1 La bancada del 1er 5B tiene ancho Bancada1=18mm (r3=9mm a cada lado)
-  2.2 Colocar en el origen (centrada) por ENCIMA del dedo
-  2.3 La bancada del 1er 4B esta a Bancada2=20mm VERTICALMENTE (hacia arriba)
-      desde el punto (-r3, 0) = (-9, 0) de la bancada principal
-
---- PASO 3: Armar el Primer Mecanismo de 5 Barras ---
-
-  3.1 Colocar manivela Link4=20mm desde el extremo derecho de la bancada (+r3, 0)
-      La manivela gira y su angulo inicial es theta2=0 grados
-  3.2 Colocar eslabon Link1=35mm desde el extremo izquierdo de la bancada (-r3, 0)
-  3.3 Conectar Link3=25mm desde el extremo de Link4 al punto P
-  3.4 Conectar Link2=49mm desde el extremo de Link1 al punto P
-  3.5 El punto P es la interseccion de Link2 y Link3 (articulacion flotante)
-
---- PASO 4: Armar el Primer Mecanismo de 4 Barras ---
-
-  4.1 La manivela del 4B es Link4=20mm (compartida con el 5B, via engranaje)
-      Sale del punto (-r3, 0) con angulo inicial THETA1=109 grados
-      Relacion de engranaje: THETA1 = THETA2/2 + 109
-  4.2 Bancada del 4B: Bancada2=20mm, con angulo de 90 grados (vertical)
-  4.3 Balancin: Link5=25mm, conecta la bancada al soporte S1
-  4.4 La salida del 4B determina el angulo de la falange proximal
-      THETAfp = THETA4a + atan2(hsp, dsp) = THETA4a + 43.34 grados
-
---- PASO 5: Preparar la falange medial ---
-
-  5.1 Cortar la falange medial de fm=26mm de largo
-  5.2 Articular en IFP (revoluta)
-  5.3 Marcar la posicion de S3:
-      - A dsp3=8mm de IFD (extremo distal) HACIA IFP
-      - A hsp3=12mm de ALTURA sobre el eje de la falange medial
-      - Es decir, S3 esta a 18mm de IFP y 12mm por encima
-  5.4 Marcar IFD al otro extremo (a 26mm de IFP)
-
---- PASO 6: Armar el Segundo Mecanismo de 5 Barras ---
-
-  6.1 El segundo 5B opera en un sistema de referencia rotado
-      (alineado con el vector S1->M4)
-  6.2 La "bancada" del 2do 5B es la distancia S1-S2 / 2 = Link5/2 = 12.5mm
-  6.3 Las entradas son: theta1m2 (angulo S1->S2) y theta2m2 (angulo M4->P)
-  6.4 Eslabones: r1m2=13mm, r2m2=Link7=35mm, r3m2=12.5mm,
-      r4m2=Link3=25mm, r5m2=Link6=55mm
-  6.5 La salida es el punto P2 (punto flotante del acoplador)
-
---- PASO 7: Armar el Segundo Mecanismo de 4 Barras ---
-
-  7.1 Manivela: Link7=35mm, pivota desde S2
-      Angulo de entrada: determinado por la posicion de P2 respecto a S2
-  7.2 Acoplador: Link8=52mm, conecta P2 con P3
-  7.3 Balancin: c2=46.01mm, pivota desde IFP hasta P3
-  7.4 Bancada: d2=sqrt(17^2+18^2)=24.76mm (distancia IFP a S2)
-  7.5 La salida (theta4am2) determina la posicion de P3 y
-      el angulo de la falange medial: THETAfm = THETA4am2 + 51.39
-
---- PASO 8: Armar el Tercer Mecanismo de 4 Barras (NUEVO) ---
-
-  8.1 PUNTO DE ENTRADA: P3
-      - P3 es la salida del segundo mecanismo (se mueve durante la operacion)
-      - Sus coordenadas se calculan como: IFP + c2*[cos(THETA4am2), sin(THETA4am2)]
-
-  8.2 SOPORTE S3 (pivote fijo en la falange medial):
-      - Ubicacion: sobre la falange medial
-      - A 8mm de IFD en direccion a IFP
-      - A 12mm de ALTURA por encima del eje de la falange medial
-      - Distancia total desde IFD: sqrt(8^2 + 12^2) = 14.42mm
-      - Angulo respecto al eje de la falange medial (desde IFD):
-        180 - atan2(12, 8) = 180 - 56.31 = 123.69 grados
-      - S3 esta FIJO en la falange medial (se mueve con ella)
-
-  8.3 ACOPLADOR Link9 = 25mm:
-      - Conecta el punto P3 con el punto D3
-      - P3 se mueve conducido por el segundo mecanismo
-      - D3 se mueve con la falange distal
-
-  8.4 BALANCIN Link10 = 35mm:
-      - Conecta IFD con D3
-      - Pivota en IFD (articulacion de la falange distal)
-      - D3 esta a 35mm de IFD, por ENCIMA del dedo
-      - El angulo de Link10 respecto a la horizontal ES el angulo de
-        la falange distal (thetafd) - AHORA VARIABLE
-
-  8.5 LAZO CERRADO:
-      - El mecanismo forma el lazo: IFD -> D3 -> P3 -> (segundo mec.) -> IFD
-      - La ecuacion de cierre es:
-        |P3 - IFD - Link10*[cos(tfd), sin(tfd)]|^2 = Link9^2
-      - Esto produce: cos(tfd - phi3) = (R3^2 + Link10^2 - Link9^2)/(2*Link10*R3)
-        donde R3 = |P3 - IFD| y phi3 = atan2(P3y-IFDy, P3x-IFDx)
-      - Se selecciona la solucion que mantiene D3 POR ENCIMA del dedo
-
-  8.6 ENSAMBLAJE:
-      a) Taladrar pivote revoluta en IFD para Link10
-      b) Colocar Link10 (35mm) desde IFD hacia arriba/adelante
-      c) Taladrar pivote revoluta en D3 (extremo de Link10)
-      d) Conectar Link9 (25mm) entre D3 y P3
-      e) P3 ya esta definido por el segundo mecanismo (articul. en P3)
-      f) Verificar que el lazo cierra correctamente
-      g) El soporte S3 sirve como guia/refuerzo estructural
-
---- PASO 9: Preparar la falange distal ---
-
-  9.1 Cortar la falange distal de fd=24mm de largo
-  9.2 Articular en IFD (revoluta - misma articulacion que el pivote de Link10)
-  9.3 La falange distal y Link10 comparten el pivote en IFD
-      pero Link10=35mm es mas largo que fd=24mm
-  9.4 D3 esta SOBRE la falange distal a 35mm de IFD (sobresale 11mm)
+  NOTA: el CSV 'trayectorias_DIP.csv' (lo genera el script de MATLAB) trae las
+  coordenadas de TODOS los puntos para cada angulo del actuador (0..132 deg).
 
 ================================================================================
-5. COORDENADAS DE REFERENCIA (Posicion Inicial/Extendida)
+5. GUIA DE MODELADO/ARMADO EN CAD PASO A PASO
 ================================================================================
 
-Posicion inicial: THETA2 = 0 grados (dedo extendido)
+Recomendacion general: modelar cada falange como un cuerpo (body) y cada
+eslabon del exoesqueleto como otro cuerpo; unirlos con juntas de revoluta
+(revolute joints / mates) en los puntos indicados. Trabajar en un plano (2D
+sagital) y luego dar espesor.
 
-  Origen de la Bancada 1er 5B:  (0, 0) mm
-  Art. MCF:                     (-9, -20) mm
-  Extremo Bancada 1er 5B (+r3): (+9, 0) mm
-  Extremo Bancada 1er 5B (-r3): (-9, 0) mm
+--- PASO A: falange proximal y soportes (mecanismos 1 y 2) ---
+  A.1 Falange proximal: barra de fp = 49 mm. Marcar MCF en un extremo e IFP en
+      el otro.
+  A.2 Soporte S1: a dsp = 18 mm de MCF y hsp = 17 mm hacia el DORSO.
+  A.3 Soporte S2: a (fp - dsp) = 31 mm de MCF y hsp = 17 mm hacia el DORSO.
+  A.4 Modelar bancadas y eslabones Link1..Link5 del 1er 5B+4B (segun mecanismos
+      originales). La salida fija el angulo de la falange proximal.
 
-  Nota: Las coordenadas exactas de IFP, IFD, P3, S3 y D3 dependen de la
-  solucion del mecanismo en la posicion inicial. Ejecute el script MATLAB
-  'CinematicaExoTercerMecanismo.m' para obtener las coordenadas precisas
-  en cada posicion.
+--- PASO B: falange medial (mecanismo 2) ---
+  B.1 Falange medial: barra de fm = 26 mm, articulada en IFP (revoluta).
+  B.2 Modelar el 2do 5B+4B (Link6, Link7, Link8, c2) que mueve la falange
+      medial. Su salida define el angulo de la falange medial (THETAfm).
+  B.3 Marcar IFD en el extremo distal de la falange medial (a 26 mm de IFP).
 
-================================================================================
-6. RESTRICCIONES Y NOTAS IMPORTANTES
-================================================================================
+--- PASO C: soporte dorsal S3 y pivote Pa (tercer mecanismo) ---
+  C.1 Crear un soporte rigido S3 ANCLADO a la falange PROXIMAL (no a la medial).
+  C.2 El soporte se extiende hacia adelante (hacia la punta) en voladizo y
+      coloca el pivote Pa en:
+        - 12 mm por delante de la IFP, medido a lo largo del eje de la falange
+          proximal (direccion hacia la punta), y
+        - 2 mm hacia el DORSO (perpendicular al eje de la falange proximal).
+      En reposo Pa ~= (-70.02, -18.66). |Pa-IFP| ~= 12.17 mm.
+  C.3 Pa es un pivote de revoluta (eje perpendicular al plano sagital).
+  C.4 Dejar ~2 mm de holgura dorsal entre el soporte/voladizo y la falange
+      medial para que la medial pueda girar por debajo de Pa sin tocarlo.
 
-  a) TODO el mecanismo va montado SOBRE el dedo (parte dorsal/superior).
-     Los soportes S1, S2 y S3 tienen alturas hsp y hsp3 POSITIVAS,
-     lo que significa que estan por encima del eje longitudinal del dedo.
+--- PASO D: pieza distal rigida (falange distal + balancin L10) ---
+  D.1 Modelar una sola pieza rigida con dos brazos que comparten el pivote IFD:
+        - Brazo 1 (falange distal): fd = 24 mm, hacia la punta.
+        - Brazo 2 (balancin L10):   35 mm, hacia el DORSO.
+      El angulo entre ambos brazos es ~161 grados (fijo).
+  D.2 El extremo del brazo 2 es el punto D3 (en reposo ~= (-72.72, 6.19)).
+  D.3 Articular esta pieza en IFD (revoluta), compartida con la falange medial.
 
-  b) Las articulaciones MCF, IFP e IFD son revoluciones que solo permiten
-     flexion (no hiperextension significativa).
+--- PASO E: acoplador L9 ---
+  E.1 Modelar el acoplador como barra de Link9 = 25 mm.
+  E.2 Unirlo con revoluta en D3 (un extremo) y con revoluta en Pa (otro extremo).
+  E.3 Con esto el lazo de 4 barras queda cerrado: Pa - IFP - IFD - D3 - Pa.
 
-  c) El tercer mecanismo NO altera el funcionamiento de los dos primeros.
-     Los mecanismos 1 y 2 operan exactamente igual que en el diseno original.
-
-  d) Link10 = 35mm es mas largo que la falange distal (fd=24mm). Esto es
-     intencionado: el punto D3 sobresale 11mm mas alla de la punta del dedo,
-     proporcionando un brazo de palanca adecuado para el Link9.
-
-  e) La desigualdad triangular debe cumplirse en todo el rango:
-     |Link10 - Link9| < R3 < Link10 + Link9
-     Es decir: 10 mm < R3 < 60 mm (donde R3 = distancia de IFD a P3)
-
-  f) Se selecciona siempre la configuracion que mantiene D3 por encima
-     del dedo (mecanismo sobre el dorso de la mano).
-
-  g) El soporte S3 proporciona rigidez estructural adicional al mecanismo.
-     Puede usarse como punto de anclaje para una guia o como pivote de
-     refuerzo.
-
-================================================================================
-7. CONEXION DEL TERCER MECANISMO CON EL SEGUNDO
-================================================================================
-
-El tercer mecanismo se conecta al segundo a traves del punto P3:
-
-  SEGUNDO MECANISMO (salida) --> P3 --> TERCER MECANISMO (entrada)
-
-  Detalle de la conexion:
-  - P3 es el extremo del balancin del segundo 4B (a c2=46.01mm de IFP)
-  - P3 tiene una articulacion revoluta donde se conecta Link9
-  - Link9 (25mm) va desde P3 hasta D3
-  - D3 tiene articulacion revoluta en el extremo de Link10
-  - Link10 (35mm) pivota en IFD
-
-  Es decir, el punto P3 es COMPARTIDO entre el segundo y tercer mecanismo.
-  En P3 convergen:
-    - El acoplador Link8 (52mm) del segundo 4B (viene de P2)
-    - El balancin c2 (46.01mm) del segundo 4B (viene de IFP)
-    - El acoplador Link9 (25mm) del tercer 4B (va hacia D3)
-
-  IMPORTANTE: En P3 debe haber una articulacion revoluta triple
-  (tres eslabones comparten el mismo pivote).
+--- PASO F: cierre y comprobacion ---
+  F.1 Verificar que en reposo todas las longitudes coinciden:
+        |IFP-IFD| = 26, |IFD-D3| = 35, |D3-Pa| = 25, |Pa-IFP| ~= 12.17.
+  F.2 El mecanismo debe tener 1 grado de libertad efectivo (lo impone el
+      actuador a traves de los mecanismos 1 y 2).
 
 ================================================================================
-8. AJUSTES REALIZADOS AL DISENO ORIGINAL
+6. RESTRICCIONES (CONSTRAINTS) Y VERIFICACION DE MOVIMIENTO
 ================================================================================
 
-  AJUSTE 1: Se agregaron los parametros hsp3=12mm y dsp3=8mm para definir
-            la posicion del soporte S3 sobre la falange medial.
-            Justificacion: Son proporcionales a fm=26mm y mantienen el
-            mecanismo compacto. hsp3=12mm < hsp=17mm para que no interfiera
-            con los eslabones del segundo mecanismo que pasan por encima.
+  a) MONTAJE DORSAL: S1, S2, Pa y D3 quedan del lado DORSAL (alturas/standoff
+     positivos hacia el dorso). NADA del hardware va por el lado palmar.
 
-  AJUSTE 2: Link9=25mm y Link10=35mm (parametros que ya existian pero no
-            se usaban) ahora forman el acoplador y balancin del tercer 4B.
-            Justificacion: Estos valores ya estaban definidos en el diseno
-            original y se verifico que cumplen la desigualdad triangular
-            en todo el rango de movimiento.
+  b) Juntas de revoluta en: MCF, IFP, IFD, Pa, D3 (y las propias de los
+     mecanismos 1 y 2). Todas con eje perpendicular al plano sagital.
 
-  AJUSTE 3: El angulo THETAauxfd=38.78 grados ya NO es constante. Ahora es
-            una referencia, pero el angulo real de la falange distal se
-            calcula mediante el tercer mecanismo de 4 barras.
-            Justificacion: Este es el cambio fundamental que proporciona
-            movimiento variable e independiente a la falange distal.
+  c) Pa es FIJO a la falange proximal (mate rigido entre el soporte S3 y la
+     falange proximal). NO a la falange medial.
 
-  NO SE MODIFICARON: Ninguno de los eslabones originales (Link1 a Link8),
-  las dimensiones de las bancadas, las alturas de los soportes S1 y S2,
-  ni las longitudes de las falanges. El diseno original se preserva intacto.
+  d) La pieza distal (falange distal + balancin L10) es UN cuerpo rigido; el
+     angulo de ~161 deg entre los dos brazos NO debe poder variar.
+
+  e) Desigualdad triangular del 4 barras: 10 mm < |Pa-IFD| < 60 mm en todo el
+     rango (se cumple; |Pa-IFD| ~= 15.65 mm en reposo).
+
+  f) Simular el cierre del dedo accionando el actuador (THETA2 de 0 a 132 deg).
+     Resultado esperado:
+        - MCP, IFP flexionan segun los mecanismos 1 y 2.
+        - IFD flexiona de 0 a ~15.6 grados de forma GRADUAL y monotona durante
+          casi todo el rango (puede retroceder muy poco en la flexion extrema
+          final por el toggle del 4 barras; ver Nota 8).
+
+  g) Comprobar que no hay colisiones: el acoplador L9 y el soporte Pa mantienen
+     holgura (~5 mm) con la falange medial; nada cruza al lado palmar.
 
 ================================================================================
-FIN DE LA GUIA DE ARMADO
+7. COMO COMPARAR EL CAD CONTRA LOS SCRIPTS DE VALIDACION
+================================================================================
+
+  1) Ejecutar en MATLAB/Octave:
+        >> trayectorias_tercer_mecanismo
+     Esto genera 'trayectorias_DIP.csv' con las coordenadas (x,y) de MCF, IFP,
+     IFD, punta del dedo (PF), D3, Pa y P3 para THETA2 = 0..132 deg, ademas de
+     los angulos THETAfp/THETAfm/THETAfd.
+
+  2) En el CAD, hacer un barrido del actuador y exportar las posiciones de los
+     mismos puntos (IFP, IFD, punta, D3) a lo largo del movimiento.
+
+  3) Superponer ambas trayectorias. Deben coincidir dentro de la tolerancia de
+     fabricacion. La figura 1 del script muestra como deben verse las
+     trayectorias (arcos de IFP, IFD, punta y D3).
+
+  4) Validar el rango articular con:
+        >> validacion_cinematica_DIP
+     Reporta el ROM de MCP/IFP/IFD y la suavidad del movimiento (salto maximo
+     entre pasos < 5 deg => movimiento gradual).
+
+  5) Referencia visual de estilo: 'diagrama_tercer_mecanismo.png' (B/N de
+     ingenieria) muestra el dedo y los tres mecanismos en una pose.
+
+================================================================================
+8. NOTAS, HOLGURAS Y AJUSTES PERMITIDOS
+================================================================================
+
+  - Movimiento esperado de la IFD: 0 -> ~15.6 grados, gradual y monotono
+    durante ~88% del rango. En la flexion EXTREMA final el angulo de la IFD
+    puede retroceder ligeramente por el toggle del 4 barras. Si en el CAD
+    molesta, se puede afinar L9/L10 o el offset (back3, up3) para suavizarlo.
+
+  - back3 y up3 son ajustables: si en el CAD aparece interferencia entre el
+    soporte/voladizo (Pa) y la falange medial, aumentar un poco up3 (mas
+    standoff dorsal) o reducir el adelanto |back3|. Tras cualquier cambio,
+    re-ejecutar 'trayectorias_tercer_mecanismo' y 'validacion_cinematica_DIP'
+    para confirmar que el ROM y la suavidad siguen bien.
+
+  - Link9 = 25 y Link10 = 35 son los valores del disenador. Cambiarlos altera
+    el rango de la IFD; manten la desigualdad triangular (10 < |Pa-IFD| < 60).
+
+  - NO se modificaron los eslabones de los mecanismos 1 y 2 (Link1..Link8),
+    las bancadas, los soportes S1/S2 ni las longitudes de las falanges. El
+    diseno original se preserva intacto; el tercer mecanismo solo agrega el
+    soporte dorsal S3 (pivote Pa), el acoplador L9 y el balancin L10.
+
+================================================================================
+FIN DE LA GUIA DE ARMADO EN CAD
 ================================================================================

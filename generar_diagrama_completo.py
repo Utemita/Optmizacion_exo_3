@@ -159,19 +159,21 @@ lbl_link(P2, P3, r"$L_8$", dy=2)
 lbl_link(IFP, P3, r"$c_2$", dx=-4)
 
 # --- TERCER MECANISMO DE 4 BARRAS (IFD / DIP) ---
-# Cuadrilatero (montado SOBRE el dedo):
+# Cuadrilatero (montado SOBRE el dedo, lado DORSAL):
 #   - Barra de tierra : P_a -> IFP  (bracket S3 rigido a la falange proximal)
 #   - Manivela/entrada: IFP -> IFD  (la PROPIA falange medial, F_m)
 #   - Balancin        : IFD -> D3   (L10), rigido con la falange distal
 #   - Acoplador       : D3  -> P_a  (L9)
-# Como la falange medial gira respecto a la proximal al flexionar la IFP, el
-# balancin (L10) gira y la falange distal flexiona de forma GRADUAL.
+# TODO el mecanismo va por el DORSO (mismo lado que el resto del exoesqueleto)
+# para NO chocar con la palma. Aun asi, al flexionar la IFP la falange distal
+# FLEXIONA de forma GRADUAL (se curva hacia la palma).
 #
-# Bracket rigido S3 que fija P_a a la falange proximal (segundo punto de
-# anclaje Q sobre el hueso, para que P_a NO quede "flotando").
+# Bracket rigido S3 que fija P_a a la falange proximal. Como P_a se adelanta
+# pasando la IFP, el bracket se ancla a un punto Q sobre la falange proximal
+# (por detras de la IFP) para que P_a NO quede "flotando".
 thetafp_d = np.deg2rad(est["THETAfp"])
 prox_dir = np.array([np.cos(thetafp_d), np.sin(thetafp_d)])
-Q = IFP - (K.back3 + 16.0) * prox_dir              # 2do anclaje sobre F_p
+Q = IFP - 16.0 * prox_dir                          # anclaje sobre F_p (tras IFP)
 ax.add_patch(plt.Polygon([Q, IFP, Pa], closed=True, facecolor="0.88",
                          edgecolor="black", linewidth=1.0, zorder=2))
 link(Q, Pa, lw=1.2)                                # strut del bracket S3

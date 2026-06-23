@@ -190,15 +190,20 @@ P.THETAauxfm = 51.39;
 P.THETAauxfd = 38.78;
 P.reng = 2;
 
-% --- Tercer mecanismo (montado SOBRE el dedo) ---
+% --- Tercer mecanismo (montado SOBRE el dedo, lado DORSAL) ---
 % Anclaje Pa de la manivela/acoplador, fijo a la falange proximal (soporte S3).
-% El acoplador corre por el lado PALMAR (como el tendon flexor profundo) para
-% que la flexion de la IFP induzca FLEXION (hacia abajo) de la IFD:
-%   back3 : retroceso a lo largo de la falange proximal (hacia MCF), mm
-%   up3   : separacion PALMAR (perpendicular a la falange proximal), mm
-% Valores calibrados para movimiento DIP gradual y de flexion en todo el rango.
-P.back3 = 2.0;
-P.up3   = 12.0;
+% TODO el mecanismo (Pa, acoplador L9, balancin L10, D3) va por el lado DORSAL
+% del dedo -el mismo lado que el resto del exoesqueleto- para NO chocar con la
+% palma al cerrar el puno. Aun asi, la geometria del 4 barras hace que al
+% flexionar la IFP la falange distal FLEXIONE (se curva hacia la palma) de
+% forma GRADUAL, como un dedo real.
+%   back3 : desplazamiento a lo largo de la falange proximal; NEGATIVO = el
+%           soporte dorsal se extiende HACIA ADELANTE, pasando la IFP (mm)
+%   up3   : standoff DORSAL (perpendicular a la falange proximal), perfil bajo (mm)
+% Valores calibrados para flexion DIP gradual (~15 deg pico) manteniendo holgura
+% dorsal con los huesos y sin colision con la palma.
+P.back3 = -12.0;
+P.up3   = 2.0;
 
 % Variables derivadas (igual que en el .m original)
 P.r4 = P.Link1;
@@ -357,15 +362,16 @@ end
 
 
 function tm = tercer_mecanismo(est, P, gamma_bracket, dorsal_sign)
-% Resuelve el tercer mecanismo de 4 barras (montado SOBRE el dedo):
+% Resuelve el tercer mecanismo de 4 barras (montado SOBRE el dedo, DORSAL):
 %   Tierra:    Pa -> IFP  (bracket S3 rigido sobre la falange PROXIMAL)
 %   Manivela:  IFP -> IFD (la PROPIA falange medial, fm = 26 mm)
 %   Balancin:  IFD -> D3   (Link10 = 35 mm), rigido con la falange distal
-%   Acoplador: D3  -> Pa   (Link9 = 25 mm), por el lado PALMAR
+%   Acoplador: D3  -> Pa   (Link9 = 25 mm), por el lado DORSAL
 %
-% El acoplador corre por el lado PALMAR (igual que el tendon flexor profundo),
-% de modo que al flexionar la IFP la falange distal FLEXIONA (se curva hacia
-% abajo) de forma GRADUAL, como un dedo real; de ir por el dorso se extenderia.
+% TODO el mecanismo va por el lado DORSAL del dedo (el mismo lado que el resto
+% del exoesqueleto), para NO chocar con la palma al cerrar la mano. Aun asi, la
+% geometria del 4 barras hace que al flexionar la IFP la falange distal
+% FLEXIONE (se curva hacia la palma) de forma GRADUAL, como un dedo real.
 %
 % Si gamma_bracket / dorsal_sign vienen vacios, se calibran en esta pose y se
 % devuelven para reutilizarlos en TODO el recorrido (evita saltos por re-elegir
@@ -391,23 +397,24 @@ if isempty(dorsal_sign)
     tm.dorsal_sign = dorsal_sign;
 end
 
-% El acoplador corre por el lado PALMAR (opuesto al dorso), igual que el
-% tendon flexor profundo, para inducir FLEXION (hacia abajo) de la IFD.
-palmar_norm = -dorsal_sign * prox_norm;
+% TODO el tercer mecanismo va por el lado DORSAL (mismo lado que P3 y el resto
+% del exoesqueleto), para NO chocar con la palma al cerrar la mano.
+dorsal_norm = dorsal_sign * prox_norm;
 
-% Anclaje de la manivela/acoplador, fijo a la falange proximal (soporte S3):
-% retroceso back3 hacia MCF + separacion palmar up3.
-Pa = IFP - P.back3 * prox_dir + P.up3 * palmar_norm;
+% Anclaje del acoplador fijo a la falange proximal (soporte S3):
+% back3 negativo => el soporte se extiende HACIA ADELANTE pasando la IFP;
+% up3 => standoff DORSAL de perfil bajo.
+Pa = IFP - P.back3 * prox_dir + P.up3 * dorsal_norm;
 
 [solA, solB, okFlag] = circle_intersections(Pa, P.Link9, IFD, P.Link10);
 if ~okFlag
     return;
 end
 
-% Seleccion deterministica y continua de la rama (lado +perp de la recta
-% Pa->IFD), equivalente a sols(1) en el modulo Python. Produce el movimiento
-% de FLEXION distal gradual.
-D3 = solA;
+% Rama del 4 barras (interseccion -perp, equivalente a sols(2)/solB en el
+% modulo Python). Con el anclaje dorsal adelantado, coloca D3 por el DORSO de
+% la falange distal y produce FLEXION distal GRADUAL al cerrarse el dedo.
+D3 = solB;
 
 ang_rocker = atan2(D3(2) - IFD(2), D3(1) - IFD(1));   % rad
 

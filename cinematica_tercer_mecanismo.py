@@ -49,17 +49,22 @@ THETAauxfm = 51.39
 THETAauxfd = 38.78
 reng = 2
 
-# --- Parametros del tercer mecanismo de 4 barras ---
+# --- Parametros del tercer mecanismo de 4 barras (montado SOBRE el dedo) ---
 # El 4 barras usa la PROPIA falange medial como manivela de entrada y un punto
-# fijo Pa (soporte S3) sobre la falange proximal como pivote del acoplador.
-# Para que la flexion de la IFP induzca FLEXION (hacia abajo) de la IFD -como un
-# dedo real-, el acoplador corre por el lado PALMAR (igual que el tendon flexor
-# profundo). Pa se define respecto a IFP con:
-#   back3 : retroceso a lo largo de la falange proximal (hacia MCF), mm
-#   up3   : separacion PALMAR (perpendicular a la falange proximal), mm
-# Valores calibrados para movimiento DIP gradual y de flexion en todo el rango.
-back3 = 2.0
-up3 = 12.0
+# fijo Pa (soporte S3) RIGIDO a la falange proximal como pivote del acoplador.
+# TODO el mecanismo (Pa, acoplador L9, balancin L10, punto D3) va por el lado
+# DORSAL del dedo -el mismo lado que el resto del exoesqueleto- para NO chocar
+# con la palma de la mano al cerrar el puno. Aun asi, la geometria del 4 barras
+# hace que al flexionar la IFP la falange distal FLEXIONE (se curva hacia la
+# palma) de forma GRADUAL, como un dedo real.
+# Pa se define respecto a IFP con:
+#   back3 : desplazamiento a lo largo de la falange proximal. NEGATIVO = el
+#           soporte dorsal se extiende HACIA ADELANTE, pasando la IFP (mm).
+#   up3   : standoff DORSAL (perpendicular a la falange proximal), perfil bajo (mm).
+# Valores calibrados para flexion DIP gradual (~15 deg pico) manteniendo holgura
+# dorsal con los huesos (Pa-falange medial ~5 mm) y sin colision con la palma.
+back3 = -12.0
+up3 = 2.0
 
 # Asignacion a variables de las ecuaciones (igual que el .m)
 r4 = Link1
@@ -245,12 +250,13 @@ def tercer_mecanismo(estado, gamma_bracket=None, dorsal_sign=None):
       - Tierra:     Pa -> IFP  (bracket S3 rigido sobre la falange PROXIMAL)
       - Manivela:   IFP -> IFD (la PROPIA falange medial, fm = 26 mm)
       - Balancin:   IFD -> D3  (Link10 = 35 mm), rigido con la falange distal
-      - Acoplador:  D3 -> Pa   (Link9 = 25 mm), por el lado PALMAR
+      - Acoplador:  D3 -> Pa   (Link9 = 25 mm), por el lado DORSAL
 
-    Como la falange medial gira respecto a la proximal al flexionar la IFP, el
-    balancin gira y la falange distal FLEXIONA (se curva hacia abajo) de forma
-    GRADUAL, igual que un dedo real. El acoplador corre por el lado palmar (como
-    el tendon flexor profundo); de ir por el dorso, la IFD se extenderia.
+    TODO el mecanismo va montado por el lado DORSAL del dedo (el mismo lado que
+    el resto del exoesqueleto), para NO chocar con la palma al cerrar la mano.
+    Aun asi, la geometria del 4 barras hace que al flexionar la IFP la falange
+    distal FLEXIONE (se curva hacia la palma) de forma GRADUAL, igual que un
+    dedo real.
     `gamma_bracket` calibra el offset del soporte para conservar la flexion
     natural inicial; `dorsal_sign` fija de forma CONSISTENTE el lado del montaje.
     """
@@ -262,27 +268,28 @@ def tercer_mecanismo(estado, gamma_bracket=None, dorsal_sign=None):
     prox_dir = np.array([np.cos(thetafp), np.sin(thetafp)])
     prox_norm = np.array([-prox_dir[1], prox_dir[0]])
 
-    # Signo dorsal: se decide UNA sola vez (calibracion) usando el lado de P3,
-    # y luego se mantiene fijo.
+    # Signo dorsal: se decide UNA sola vez (calibracion) usando el lado de P3
+    # (el resto del exoesqueleto va por el dorso) y luego se mantiene fijo.
     if dorsal_sign is None:
         dorsal_sign = 1.0 if np.dot(estado["P3"] - IFP, prox_norm) >= 0 else -1.0
 
-    # El acoplador del tercer mecanismo corre por el lado PALMAR (opuesto al
-    # dorso), igual que el tendon flexor profundo, de modo que al flexionar la
-    # IFP la falange distal FLEXIONA (se curva hacia abajo) en vez de extenderse.
-    palmar_norm = -dorsal_sign * prox_norm
+    # TODO el tercer mecanismo va por el lado DORSAL (mismo lado que P3 y el
+    # resto del exoesqueleto), para NO chocar con la palma al cerrar la mano.
+    dorsal_norm = dorsal_sign * prox_norm
 
-    # Anclaje de la manivela/acoplador FIJO a la falange proximal (soporte S3):
-    # retroceso back3 hacia MCF + separacion palmar up3.
-    Pa = IFP - back3 * prox_dir + up3 * palmar_norm
+    # Anclaje del acoplador FIJO a la falange proximal mediante el soporte S3.
+    # back3 negativo => el soporte se extiende hacia ADELANTE pasando la IFP;
+    # up3 => standoff DORSAL de perfil bajo.
+    Pa = IFP - back3 * prox_dir + up3 * dorsal_norm
 
     sols = _circle_intersections(Pa, Link9, IFD, Link10)
     if sols is None:
         return None
 
-    # Seleccion deterministica y continua de la rama (lado +perp de la recta
-    # Pa->IFD). Esta rama produce el movimiento de FLEXION distal gradual.
-    D3 = sols[0]
+    # Rama del 4 barras (interseccion -perp). Con el anclaje dorsal adelantado,
+    # esta rama coloca D3 por el DORSO de la falange distal y produce FLEXION
+    # distal GRADUAL al cerrarse el dedo.
+    D3 = sols[1]
 
     ang_rocker = np.arctan2(D3[1] - IFD[1], D3[0] - IFD[0])  # rad
 

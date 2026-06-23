@@ -151,17 +151,37 @@ lbl_link(S2, P2, r"$L_7$", dx=-3)
 
 # --- Segundo mecanismo de 4 barras ---
 link(P2, P3)                                       # L8 (acoplador)
-link(IFP, P3)                                      # c2 (rocker -> falange medial)
+# c2 NO es un eslabon fisico: es la distancia/rocker virtual IFP -> P3.
+# Se dibuja como linea de construccion (punteada), igual que en el modelo
+# original del disenador.
+link(IFP, P3, ls=":", lw=1.0)                      # c2 (construccion, no fisico)
 lbl_link(P2, P3, r"$L_8$", dy=2)
 lbl_link(IFP, P3, r"$c_2$", dx=-4)
 
 # --- TERCER MECANISMO DE 4 BARRAS (IFD / DIP) ---
-link(IFP, Pa)                                      # manivela (sobre f. proximal)
-link(Pa, D3, lw=1.6)                               # L9 (acoplador)
-link(IFD, D3, lw=1.6)                              # L10 (balancin)
-lbl_link(IFP, Pa, r"$r_{3m}$", dx=4, dy=-1)
-lbl_link(Pa, D3, r"$L_9$", dy=2.5)
-lbl_link(IFD, D3, r"$L_{10}$", dx=3.5)
+# Cuadrilatero (montado SOBRE el dedo):
+#   - Barra de tierra : P_a -> IFP  (bracket S3 rigido a la falange proximal)
+#   - Manivela/entrada: IFP -> IFD  (la PROPIA falange medial, F_m)
+#   - Balancin        : IFD -> D3   (L10), rigido con la falange distal
+#   - Acoplador       : D3  -> P_a  (L9)
+# Como la falange medial gira respecto a la proximal al flexionar la IFP, el
+# balancin (L10) gira y la falange distal flexiona de forma GRADUAL.
+#
+# Bracket rigido S3 que fija P_a a la falange proximal (segundo punto de
+# anclaje Q sobre el hueso, para que P_a NO quede "flotando").
+thetafp_d = np.deg2rad(est["THETAfp"])
+prox_dir = np.array([np.cos(thetafp_d), np.sin(thetafp_d)])
+Q = IFP - (K.back3 + 16.0) * prox_dir              # 2do anclaje sobre F_p
+ax.add_patch(plt.Polygon([Q, IFP, Pa], closed=True, facecolor="0.88",
+                         edgecolor="black", linewidth=1.0, zorder=2))
+link(Q, Pa, lw=1.2)                                # strut del bracket S3
+link(IFP, Pa, lw=1.2)                              # barra de tierra (P_a-IFP)
+link(Pa, D3, lw=1.7)                               # L9 (acoplador)
+link(IFD, D3, lw=1.7)                              # L10 (balancin)
+lbl_link(Pa, D3, r"$L_9$", dx=-2, dy=2.5)
+lbl_link(IFD, D3, r"$L_{10}$", dx=4)
+ax.text(Pa[0] - 3, Pa[1] + 4.5, r"$S_3$", fontsize=FS_LINK, style="italic",
+        ha="right", va="bottom", color="black", zorder=18)
 
 # =============================================================================
 # 4) FALANGES (hueso del dedo, con flexion natural)
@@ -235,4 +255,7 @@ print("Diagrama generado:", out)
 print(f"Pose: THETA2={THETA2_diagrama} deg | THETAfm={est['THETAfm']:.2f} "
       f"THETAfd={tm['THETAfd']:.2f}")
 print("Estilo: blanco y negro, ingenieria. Falanges con flexion natural.")
-print("Tercer mecanismo: IFP->Pa (manivela), Pa->D3 (L9=25), IFD->D3 (L10=35).")
+print("c2 dibujado como linea de construccion (no es eslabon fisico).")
+print("Tercer mecanismo (4 barras): tierra Pa-IFP (bracket S3 sobre f.proximal),")
+print("  entrada IFP->IFD (falange medial Fm), balancin IFD->D3 (L10=35),")
+print("  acoplador D3->Pa (L9=25). La flexion de la IFP impulsa la flexion DIP.")

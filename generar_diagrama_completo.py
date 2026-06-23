@@ -1,425 +1,238 @@
 """
-Script para generar el diagrama cinematico CORREGIDO del exoesqueleto
-con TERCER MECANISMO SIMPLIFICADO.
+generar_diagrama_completo.py
+=============================
+Genera el diagrama cinematico del exoesqueleto CON el tercer mecanismo de
+4 barras (Link9 = 25 mm, Link10 = 35 mm) para la articulacion IFD/DIP.
 
-CORRECCIONES IMPLEMENTADAS:
-1. Falanges con FLEXION NATURAL desde posicion inicial (no rectas)
-2. Eslabones L9 y L10 CORRECTAMENTE CONECTADOS
-3. Posiciones calculadas con CINEMATICA REAL (no esquematicas)
-4. Estilo blanco y negro de ingenieria
-
-Equivalente a generar_diagrama_corregido.m
+El diagrama:
+  - Usa las POSICIONES REALES calculadas por la cinematica completa
+    (cinematica_tercer_mecanismo.py), portada fielmente de CinematicaExoFinal.m.
+  - Conserva la flexion natural de las falanges (curvadas, no rectas).
+  - Muestra TODOS los eslabones correctamente conectados, incluido el tercer
+    mecanismo P_a -> D3 (L9) y IFD -> D3 (L10).
+  - Estilo BLANCO Y NEGRO de ingenieria, identico en espiritu a `diagrama.png`:
+    fondo blanco, lineas negras, articulaciones como circulos blancos con borde
+    negro, soportes con achurado, sin colores, sin leyenda, sin grilla.
 """
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.patches import Circle, FancyArrowPatch
-import matplotlib.patches as mpatches
+
+import cinematica_tercer_mecanismo as K
 
 # =============================================================================
-# PARAMETROS DE DISENO (identicos a CinematicaExoTercerMecanismo.m)
+# 1) CALCULO DE LA POSE A DIBUJAR (posicion representativa, flexion natural)
 # =============================================================================
-Bancada1 = 18
-Bancada2 = 20
-Link1 = 35
-Link2 = 49
-Link3 = 25
-Link4 = 20
-Link5 = 25
-Link6 = 55
-Link7 = 35
-Link8 = 52
-Link9 = 25  # Tercer mecanismo - acoplador (aumentado de 20 a 25)
-Link10 = 15  # Tercer mecanismo - balancin (aumentado de 12 a 15)
-c2 = 46.01
-TETHA2inicial = 0
-TETHA1inicial = 109
-THETA14B = 90
-hsp = 17
-dsp = 18
-fp = 49
-fm = 26
-fd = 24
-THETAauxfm = 51.39
-THETAauxfd = 38.78
-d_c2 = 15  # Distancia de IFP a punto C2
-delta_max = 15  # Movimiento maximo DIP
+THETA2_diagrama = 40.0  # grados (pose intermedia, flexion clara)
 
-omega2 = 10
-reng = 2
+est = K.cinematica_paso(THETA2_diagrama)
+# Calibracion del tercer mecanismo en la pose inicial (j=0) para conservar la
+# flexion natural en reposo y mantener el lado dorsal consistente.
+est0 = K.cinematica_paso(0.0)
+cal = K.tercer_mecanismo(est0)
+gamma = cal["gamma_bracket"]
+dorsal = cal["dorsal_sign"]
+tm = K.tercer_mecanismo(est, gamma_bracket=gamma, dorsal_sign=dorsal)
 
-# Asignacion de variables
-r4 = Link1
-r5 = Link2
-r2 = Link3
-r1 = Link4
-r3 = Bancada1 / 2
+# Puntos principales
+MCF = est["MCF"]
+IFP = est["IFP"]
+IFD = est["IFD"]
+P = est["P"]
+P2 = est["P2"]
+P3 = est["P3"]
+S1 = est["S1"]
+S2 = est["S2"]
+M4 = est["M4"]
+Pa = tm["Pa"]
+D3 = tm["D3"]
+PF = tm["PF"]
 
-a = Link4
-b = Link5
-c = np.sqrt(hsp**2 + dsp**2)
-d = Bancada2
+# Bancadas (puntos fijos)
+r3 = K.r3
+G1 = np.array([-r3, 0.0])   # pivote manivela theta1 / manivela 4B1
+G2 = np.array([r3, 0.0])    # pivote manivela theta2 (5 barras 1)
 
-r1m2 = fp - 2*dsp
-r2m2 = Link7
-r3m2 = Link5 / 2
-r4m2 = Link3
-r5m2 = Link6
-
-a2 = Link7
-b2 = Link8
-d2 = np.sqrt(hsp**2 + dsp**2)
+# Tip de la manivela theta2 (Link1) del primer 5 barras
+theta2 = np.deg2rad(THETA2_diagrama)
+T2 = G2 + K.Link1 * np.array([np.cos(theta2), np.sin(theta2)])
 
 # =============================================================================
-# SELECCION DE POSICION PARA EL DIAGRAMA
+# 2) ESTILO B/N
 # =============================================================================
-# Usamos theta2 = 40 grados como posicion intermedia representativa
-THETA2 = 40  # grados
-theta2 = np.deg2rad(THETA2)
+LW_LINK = 1.1     # eslabones del mecanismo
+LW_PHAL = 2.4     # falanges (hueso del dedo)
+LW_GROUND = 1.4
+R_JOINT = 1.5     # radio de articulaciones
+FS_PT = 9.5       # tamano etiqueta de puntos
+FS_LINK = 8.5     # tamano etiqueta de eslabones
 
-THETA1 = THETA2/reng + TETHA1inicial
-theta1 = np.deg2rad(THETA1)
+fig, ax = plt.subplots(figsize=(11, 10))
+fig.patch.set_facecolor("white")
+ax.set_facecolor("white")
 
-theta14B_rad = np.deg2rad(THETA14B)
 
-print("\n====== CALCULANDO POSICION PARA DIAGRAMA ======")
-print(f"THETA2 = {THETA2:.1f} grados")
-print(f"THETA1 = {THETA1:.1f} grados")
-print("===============================================\n")
+def link(p1, p2, lw=LW_LINK, ls="-", z=4):
+    ax.plot([p1[0], p2[0]], [p1[1], p2[1]], color="black",
+            linewidth=lw, linestyle=ls, zorder=z, solid_capstyle="round")
 
-# =============================================================================
-# PRIMER MECANISMO DE 5 BARRAS
-# =============================================================================
-e_5b = (r1*np.sin(theta1) - r4*np.sin(theta2)) / (r4*np.cos(theta2) - r1*np.cos(theta1) + 2*r3)
-temp1 = (2*(r1*r3*np.cos(theta1) + r3*r4*np.cos(theta2)) - r1**2 + r2**2 + r4**2 - r5**2)
-f_5b = temp1 / (2*(r4*np.cos(theta2) - r1*np.cos(theta1) + 2*r3))
 
-daux = e_5b**2 + 1
-g_5b = 2*(e_5b*f_5b - e_5b*r1*np.cos(theta1) + e_5b*r3 - r1*np.sin(theta1))
-h_5b = f_5b**2 - 2*f_5b*(r1*np.cos(theta1) - r3) - 2*r1*r3*np.cos(theta1) + r1**2 + r3**2 - r2**2
+def joint(p, r=R_JOINT, z=10):
+    ax.add_patch(plt.Circle((p[0], p[1]), r, facecolor="white",
+                            edgecolor="black", linewidth=1.3, zorder=z))
 
-pyP = (-g_5b + np.sqrt(g_5b**2 - 4*daux*h_5b)) / (2*daux)
-pxP = e_5b*pyP + f_5b
 
-# =============================================================================
-# PRIMER MECANISMO DE 4 BARRAS
-# =============================================================================
-k1 = d*np.cos(theta14B_rad) + a*np.cos(theta1)
-k2 = d*np.sin(theta14B_rad) + a*np.sin(theta1)
-k3 = k1**2 + k2**2 + c**2 - b**2
-A1_4b = -k3 - 2*k1*c
-B1_4b = 4*k2*c
-C1_4b = 2*k1*c - k3
+def ground(p, ang=270, size=7):
+    """Soporte fijo: triangulo pequeno + achurado, apuntando segun 'ang'."""
+    a = np.deg2rad(ang)
+    nx, ny = np.cos(a), np.sin(a)              # direccion del soporte
+    px, py = -ny, nx                           # perpendicular
+    base_c = np.array([p[0] + nx * size, p[1] + ny * size])
+    b1 = base_c + np.array([px, py]) * size * 0.6
+    b2 = base_c - np.array([px, py]) * size * 0.6
+    ax.plot([p[0], b1[0]], [p[1], b1[1]], color="black", lw=1.0, zorder=6)
+    ax.plot([p[0], b2[0]], [p[1], b2[1]], color="black", lw=1.0, zorder=6)
+    ax.plot([b1[0], b2[0]], [b1[1], b2[1]], color="black", lw=1.0, zorder=6)
+    # achurado
+    for t in np.linspace(0, 1, 6):
+        h = b1 + (b2 - b1) * t
+        ax.plot([h[0], h[0] + nx * 2.6 + px * 1.8],
+                [h[1], h[1] + ny * 2.6 + py * 1.8],
+                color="black", lw=0.7, zorder=6)
 
-tantheta42 = (-B1_4b - np.sqrt(B1_4b**2 - 4*A1_4b*C1_4b)) / (2*A1_4b)
-theta4a = 2*np.arctan(tantheta42)
-THETA4a_val = np.rad2deg(theta4a)
-if THETA4a_val < 0:
-    THETA4a_val = 360 + THETA4a_val
 
-# Posicion falange proximal
-THETAfp = THETA4a_val + np.rad2deg(np.arctan2(hsp, dsp))
-thetafp = np.deg2rad(THETAfp)
-pxIFP = fp*np.cos(thetafp) - d*np.cos(theta14B_rad) - r3
-pyIFP = fp*np.sin(thetafp) - d*np.sin(theta14B_rad)
+def lbl_pt(p, text, dx=2.5, dy=2.5, ha="left", va="bottom"):
+    ax.text(p[0] + dx, p[1] + dy, text, fontsize=FS_PT, color="black",
+            ha=ha, va=va, zorder=20)
 
-# Soportes S1 y S2
-pxS1 = c*np.cos(theta4a) - d*np.cos(theta14B_rad) - r3
-pyS1 = c*np.sin(theta4a) - d*np.sin(theta14B_rad)
-THETAps2 = THETAfp - np.rad2deg(np.arctan2(hsp, (fp-dsp)))
-thetaps2 = np.deg2rad(THETAps2)
-rs2 = np.sqrt(hsp**2 + (fp-dsp)**2)
-pxS2 = rs2*np.cos(thetaps2) - d*np.cos(theta14B_rad) - r3
-pyS2 = rs2*np.sin(thetaps2) - d*np.sin(theta14B_rad)
 
-# Punto M4
-pxM4 = a*np.cos(theta1) - r3
-pyM4 = a*np.sin(theta1)
+def lbl_link(p1, p2, text, dx=0.0, dy=0.0):
+    mx = (p1[0] + p2[0]) / 2 + dx
+    my = (p1[1] + p2[1]) / 2 + dy
+    ax.text(mx, my, text, fontsize=FS_LINK, color="black", style="italic",
+            ha="center", va="center", zorder=18)
+
 
 # =============================================================================
-# SEGUNDO MECANISMO DE 5 BARRAS
+# 3) DIBUJO DE ESLABONES (mecanismo)
 # =============================================================================
-THETAroll = np.rad2deg(np.arctan2(pyM4 - pyS1, pxM4 - pxS1))
-thetaroll = np.deg2rad(THETAroll)
+# --- Bancada (fija) ---
+link(G1, G2, lw=LW_GROUND)                         # Bancada1 (B1)
+link(G1, MCF, lw=LW_GROUND)                        # Bancada2 (B2 = d)
+lbl_link(G1, G2, r"$B_1$", dy=2.5)
+lbl_link(G1, MCF, r"$B_2$", dx=-4)
 
-THETA1m2so = np.rad2deg(np.arctan2(pyS2 - pyS1, pxS2 - pxS1))
-if THETA1m2so < 0:
-    THETA1m2so = 360 + THETA1m2so
-THETA1m2_val = THETA1m2so - THETAroll
-theta1m2 = np.deg2rad(THETA1m2_val)
+# --- Primer mecanismo de 5 barras ---
+link(G2, T2)                                       # L1 (r4)
+link(T2, P)                                        # L2 (r5)
+link(M4, P)                                        # L3 (r2)
+link(G1, M4)                                       # L4 (r1 = manivela 4B1)
+lbl_link(G2, T2, r"$L_1$", dx=3)
+lbl_link(T2, P, r"$L_2$", dx=-3, dy=2)
+lbl_link(M4, P, r"$L_3$", dx=3)
+lbl_link(G1, M4, r"$L_4$", dx=-4)
 
-THETA2m2so = np.rad2deg(np.arctan2(pyP - pyM4, pxP - pxM4))
-if THETA2m2so < 0:
-    THETA2m2so = 360 + THETA2m2so
-THETA2m2_val = THETA2m2so - THETAroll
-theta2m2 = np.deg2rad(THETA2m2_val)
+# --- Primer mecanismo de 4 barras ---
+link(M4, S1)                                       # L5 (acoplador)
+link(MCF, S1)                                      # rocker c (soporte S1)
+lbl_link(M4, S1, r"$L_5$", dy=2)
+lbl_link(MCF, S1, r"$c$", dx=3, dy=-1)
 
-temp2 = (r4m2*np.cos(theta2m2) - r1m2*np.cos(theta1m2) + 2*r3m2)
-em2 = (r1m2*np.sin(theta1m2) - r4m2*np.sin(theta2m2)) / temp2
-temp3 = (2*(r1m2*r3m2*np.cos(theta1m2) + r3m2*r4m2*np.cos(theta2m2)) - r1m2**2 + r2m2**2 + r4m2**2 - r5m2**2)
-fm2 = temp3 / (2*temp2)
+# --- Soportes de la falange proximal ---
+link(IFP, S2)                                      # d2 (ground 4B2)
+link(S1, S2)                                       # base soportes (r1m2)
 
-dauxm2 = em2**2 + 1
-gm2 = 2*(em2*fm2 - em2*r1m2*np.cos(theta1m2) + em2*r3m2 - r1m2*np.sin(theta1m2))
-hm2 = fm2**2 - 2*fm2*(r1m2*np.cos(theta1m2) - r3m2) - 2*r1m2*r3m2*np.cos(theta1m2) + r1m2**2 + r3m2**2 - r2m2**2
+# --- Segundo mecanismo de 5 barras ---
+link(P, P2)                                        # L6 (r5m2)
+link(S2, P2)                                       # L7 (r2m2 = manivela 4B2)
+lbl_link(P, P2, r"$L_6$", dy=2)
+lbl_link(S2, P2, r"$L_7$", dx=-3)
 
-pyP2_loc = (-gm2 + np.sqrt(gm2**2 - 4*dauxm2*hm2)) / (2*dauxm2)
-pxP2_loc = em2*pyP2_loc + fm2
+# --- Segundo mecanismo de 4 barras ---
+link(P2, P3)                                       # L8 (acoplador)
+link(IFP, P3)                                      # c2 (rocker -> falange medial)
+lbl_link(P2, P3, r"$L_8$", dy=2)
+lbl_link(IFP, P3, r"$c_2$", dx=-4)
 
-p2_mag = np.sqrt(pxP2_loc**2 + pyP2_loc**2)
-THETA2p2 = np.rad2deg(np.arctan2(pyP2_loc, pxP2_loc))
-theta2p2 = np.deg2rad(THETA2p2)
-
-pxAUX = (pxS1 + pxM4)/2
-pyAUX = (pyS1 + pyM4)/2
-
-pxP2so = p2_mag*np.cos(theta2p2 + thetaroll) + pxAUX
-pyP2so = p2_mag*np.sin(theta2p2 + thetaroll) + pyAUX
-
-# =============================================================================
-# SEGUNDO MECANISMO DE 4 BARRAS
-# =============================================================================
-THETA14B2 = np.rad2deg(np.arctan2(pyS2 - pyIFP, pxS2 - pxIFP))
-theta14B2 = np.deg2rad(THETA14B2)
-THETA24B2 = np.rad2deg(np.arctan2(pyP2so - pyS2, pxP2so - pxS2))
-if THETA24B2 < 0:
-    THETA24B2 = 360 + THETA24B2
-theta24B2 = np.deg2rad(THETA24B2)
-
-k1m2 = d2*np.cos(theta14B2) + a2*np.cos(theta24B2)
-k2m2 = d2*np.sin(theta14B2) + a2*np.sin(theta24B2)
-k3m2 = k1m2**2 + k2m2**2 + c2**2 - b2**2
-A1m2 = -k3m2 - 2*k1m2*c2
-B1m2 = 4*k2m2*c2
-C1m2 = 2*k1m2*c2 - k3m2
-
-tantheta42m2 = (-B1m2 - np.sqrt(B1m2**2 - 4*A1m2*C1m2)) / (2*A1m2)
-theta4am2 = 2*np.arctan(tantheta42m2)
-THETA4am2_val = np.rad2deg(theta4am2)
-if THETA4am2_val < 0:
-    THETA4am2_val = 360 + THETA4am2_val
-
-pxP3 = pxIFP + c2*np.cos(np.deg2rad(THETA4am2_val))
-pyP3 = pyIFP + c2*np.sin(np.deg2rad(THETA4am2_val))
-
-# Posicion de la falange medial (CON FLEXION NATURAL)
-THETAfm = THETA4am2_val + THETAauxfm
-thetafm = np.deg2rad(THETAfm)
-
-pxIFD = fm*np.cos(thetafm) + pxIFP
-pyIFD = fm*np.sin(thetafm) + pyIFP
+# --- TERCER MECANISMO DE 4 BARRAS (IFD / DIP) ---
+link(IFP, Pa)                                      # manivela (sobre f. proximal)
+link(Pa, D3, lw=1.6)                               # L9 (acoplador)
+link(IFD, D3, lw=1.6)                              # L10 (balancin)
+lbl_link(IFP, Pa, r"$r_{3m}$", dx=4, dy=-1)
+lbl_link(Pa, D3, r"$L_9$", dy=2.5)
+lbl_link(IFD, D3, r"$L_{10}$", dx=3.5)
 
 # =============================================================================
-# TERCER MECANISMO SIMPLIFICADO
+# 4) FALANGES (hueso del dedo, con flexion natural)
 # =============================================================================
-# Calculo del angulo incremental
-flexion_factor = (THETA2 - TETHA2inicial) / 132
-delta_angle_DIP = delta_max * np.sin(flexion_factor * np.pi/2)
+link(MCF, IFP, lw=LW_PHAL, z=3)                    # falange proximal Fp
+link(IFP, IFD, lw=LW_PHAL, z=3)                    # falange medial   Fm
+link(IFD, PF, lw=LW_PHAL, z=3)                     # falange distal   Fd
 
-# Angulo final de la falange distal (CON FLEXION NATURAL Y MOVIMIENTO TERCER MECANISMO)
-THETAfd = THETAfm + THETAauxfd + delta_angle_DIP
-thetafd = np.deg2rad(THETAfd)
+# Etiquetas de falanges (sobre el hueso, lado palmar)
+def midoff(p1, p2, perp=-7):
+    mx, my = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
+    v = np.array(p2) - np.array(p1)
+    n = np.array([-v[1], v[0]])
+    n = n / np.hypot(*n)
+    return mx + n[0] * perp, my + n[1] * perp
 
-pxPF = fd*np.cos(thetafd) + pxIFD
-pyPF = fd*np.sin(thetafd) + pyIFD
-
-# Punto C2 sobre la falange medial
-pxC2 = pxIFP + d_c2*np.cos(thetafm)
-pyC2 = pyIFP + d_c2*np.sin(thetafm)
-
-# Punto D3 determinado por la interseccion de:
-# - Circulo de radio Link9 centrado en P3
-# - Circulo de radio Link10 centrado en IFD
-# Resolvemos geometricamente para encontrar D3
-
-# Distancia IFD a P3
-dist_IFD_P3 = np.sqrt((pxP3 - pxIFD)**2 + (pyP3 - pyIFD)**2)
-
-# Angulo de la linea IFD -> P3
-angle_IFD_P3 = np.arctan2(pyP3 - pyIFD, pxP3 - pxIFD)
-
-# Verificar si es posible formar el triangulo (desigualdad triangular)
-if dist_IFD_P3 > (Link9 + Link10) or dist_IFD_P3 < abs(Link9 - Link10):
-    # No es posible, usar posicion aproximada
-    print(f"ADVERTENCIA: No es posible conectar L9 y L10 geometricamente")
-    print(f"Distancia IFD-P3 = {dist_IFD_P3:.2f} mm, Link9+Link10 = {Link9+Link10:.1f} mm")
-    # Usar posicion aproximada sobre la falange distal
-    pxD3 = pxIFD + Link10*np.cos(thetafd)
-    pyD3 = pyIFD + Link10*np.sin(thetafd)
-else:
-    # Calcular el angulo usando ley de cosenos
-    # En el triangulo IFD-P3-D3:
-    # cos(angle_at_IFD) = (Link10^2 + dist_IFD_P3^2 - Link9^2) / (2 * Link10 * dist_IFD_P3)
-    cos_angle = (Link10**2 + dist_IFD_P3**2 - Link9**2) / (2 * Link10 * dist_IFD_P3)
-    
-    # Clamp para evitar errores numericos
-    cos_angle = np.clip(cos_angle, -1, 1)
-    
-    # El angulo respecto a la linea IFD-P3
-    delta_angle = np.arccos(cos_angle)
-    
-    # Dos soluciones posibles: por encima o por debajo de la linea IFD-P3
-    # Seleccionamos la solucion que mantiene D3 SOBRE el dedo (mayor componente Y)
-    angle_D3_sol1 = angle_IFD_P3 + delta_angle
-    angle_D3_sol2 = angle_IFD_P3 - delta_angle
-    
-    # Calcular posiciones candidatas
-    pxD3_sol1 = pxIFD + Link10*np.cos(angle_D3_sol1)
-    pyD3_sol1 = pyIFD + Link10*np.sin(angle_D3_sol1)
-    
-    pxD3_sol2 = pxIFD + Link10*np.cos(angle_D3_sol2)
-    pyD3_sol2 = pyIFD + Link10*np.sin(angle_D3_sol2)
-    
-    # Seleccionar la solucion con mayor componente Y (sobre el dedo)
-    if pyD3_sol1 > pyD3_sol2:
-        pxD3 = pxD3_sol1
-        pyD3 = pyD3_sol1
-    else:
-        pxD3 = pxD3_sol2
-        pyD3 = pyD3_sol2
-
-# Verificar conexion L9
-dist_P3_D3 = np.sqrt((pxD3 - pxP3)**2 + (pyD3 - pyP3)**2)
-dist_IFD_D3 = np.sqrt((pxD3 - pxIFD)**2 + (pyD3 - pyIFD)**2)
-
-print('Posiciones calculadas:')
-print(f'IFP: ({pxIFP:.2f}, {pyIFP:.2f})')
-print(f'IFD: ({pxIFD:.2f}, {pyIFD:.2f})')
-print(f'Punta: ({pxPF:.2f}, {pyPF:.2f})')
-print(f'P3: ({pxP3:.2f}, {pyP3:.2f})')
-print(f'C2: ({pxC2:.2f}, {pyC2:.2f})')
-print(f'D3: ({pxD3:.2f}, {pyD3:.2f})')
-print('\nAngulos:')
-print(f'THETAfp = {THETAfp:.2f} grados')
-print(f'THETAfm = {THETAfm:.2f} grados')
-print(f'THETAfd = {THETAfd:.2f} grados')
-print(f'delta_angle_DIP = {delta_angle_DIP:.2f} grados')
-print('\nValidacion:')
-print(f'Distancia P3-D3 (debe ser aprox. {Link9:.1f} mm): {dist_P3_D3:.2f} mm')
-print(f'Distancia IFD-D3 (debe ser aprox. {Link10:.1f} mm): {dist_IFD_D3:.2f} mm')
-print(f'Distancia IFD-P3: {dist_IFD_P3:.2f} mm')
+fpx, fpy = midoff(MCF, IFP)
+ax.text(fpx, fpy, r"$F_p$", fontsize=10, style="italic", ha="center", va="center", zorder=18)
+fmx, fmy = midoff(IFP, IFD)
+ax.text(fmx, fmy, r"$F_m$", fontsize=10, style="italic", ha="center", va="center", zorder=18)
+fdx, fdy = midoff(IFD, PF)
+ax.text(fdx, fdy, r"$F_d$", fontsize=10, style="italic", ha="center", va="center", zorder=18)
 
 # =============================================================================
-# GENERAR DIAGRAMA EN ESTILO BLANCO Y NEGRO DE INGENIERIA
+# 5) ARTICULACIONES Y SOPORTES FIJOS
 # =============================================================================
-fig, ax = plt.subplots(figsize=(14, 8), facecolor='white')
-ax.set_facecolor('white')
-ax.axis('equal')
-ax.grid(True, alpha=0.3)
+for p in [T2, P, M4, S1, S2, P2, P3, Pa, D3, PF, MCF, IFP, IFD, G1, G2]:
+    joint(p)
 
-# Origen y bancada
-origen_x = -r3
-origen_y = -d
+# Soportes fijos (bancada)
+ground(G1, ang=90, size=6)
+ground(G2, ang=90, size=6)
 
-# --- DIBUJAR FALANGES (lineas discontinuas grises) ---
-ax.plot([origen_x, pxIFP], [origen_y, pyIFP], 'k--', linewidth=1.5, 
-        color=[0.5, 0.5, 0.5], label='Falanges')
-ax.plot([pxIFP, pxIFD], [pyIFP, pyIFD], 'k--', linewidth=1.5, color=[0.5, 0.5, 0.5])
-ax.plot([pxIFD, pxPF], [pyIFD, pyPF], 'k--', linewidth=1.5, color=[0.5, 0.5, 0.5])
+# =============================================================================
+# 6) ETIQUETAS DE PUNTOS
+# =============================================================================
+lbl_pt(MCF, "MCF", dx=3, dy=-6, va="top")
+lbl_pt(IFP, "IFP", dx=-3, dy=-6, ha="right", va="top")
+lbl_pt(IFD, "IFD", dx=2, dy=-6, va="top")
+lbl_pt(PF, "PF", dx=-4, dy=-3, ha="right", va="top")
+lbl_pt(P, r"$P$", dx=3, dy=2)
+lbl_pt(P2, r"$P_2$", dx=-3, dy=3, ha="right")
+lbl_pt(P3, r"$P_3$", dx=-3, dy=2, ha="right")
+lbl_pt(S1, r"$S_1$", dx=2, dy=3)
+lbl_pt(S2, r"$S_2$", dx=-2, dy=-5, ha="right", va="top")
+lbl_pt(M4, r"$M_4$", dx=3, dy=2)
+lbl_pt(Pa, r"$P_a$", dx=3, dy=3)
+lbl_pt(D3, r"$D_3$", dx=3, dy=2)
+lbl_pt(G1, r"$G_1$", dx=-3, dy=3, ha="right")
+lbl_pt(G2, r"$G_2$", dx=3, dy=3)
 
-# --- DIBUJAR ESLABONES DEL MECANISMO (lineas solidas negras) ---
-ax.plot([origen_x, pxP], [origen_y, pyP], 'k-', linewidth=2.5, alpha=0.6)
-ax.plot([pxP, pxIFP], [pyP, pyIFP], 'k-', linewidth=2.5, alpha=0.6)
-ax.plot([pxS1, pxS2], [pyS1, pyS2], 'k-', linewidth=2.5, alpha=0.6)
-ax.plot([pxS2, pxP2so], [pyS2, pyP2so], 'k-', linewidth=2.5, alpha=0.6)
-ax.plot([pxP2so, pxP3], [pyP2so, pyP3], 'k-', linewidth=2.5, alpha=0.6)
+# =============================================================================
+# 7) AJUSTES FINALES
+# =============================================================================
+ax.set_aspect("equal")
+ax.axis("off")
 
-# TERCER MECANISMO (L9 y L10 - lineas solidas negras GRUESAS)
-ax.plot([pxP3, pxD3], [pyP3, pyD3], 'k-', linewidth=3.5, label='L9 (Tercer Mec.)')
-ax.plot([pxIFD, pxD3], [pyIFD, pyD3], 'k-', linewidth=3.5, label='L10 (Tercer Mec.)')
-
-# Link de conexion C2 (auxiliar)
-ax.plot([pxC2, pxD3], [pyC2, pyD3], 'k:', linewidth=1.5, alpha=0.5)
-
-# --- DIBUJAR ARTICULACIONES (circulos blancos con borde negro) ---
-joint_radius = 1.2
-joints = [
-    (origen_x, origen_y, 'MCF'),
-    (pxIFP, pyIFP, 'IFP'),
-    (pxIFD, pyIFD, 'IFD'),
-    (pxPF, pyPF, ''),
-    (pxP, pyP, 'P'),
-    (pxS1, pyS1, 'S1'),
-    (pxS2, pyS2, 'S2'),
-    (pxP2so, pyP2so, 'P2'),
-    (pxP3, pyP3, 'P3'),
-    (pxC2, pyC2, 'C2'),
-    (pxD3, pyD3, 'D3'),
-    (pxM4, pyM4, '')
-]
-
-for x, y, label in joints:
-    circle = Circle((x, y), joint_radius, fill=True, facecolor='white',
-                   edgecolor='black', linewidth=1.5, zorder=10)
-    ax.add_patch(circle)
-    if label:
-        offset_x = 3 if 'P' in label or 'D' in label or 'S' in label else -3
-        offset_y = 2 if 'P' in label or 'D' in label else -3
-        ax.text(x + offset_x, y + offset_y, label, fontsize=11, 
-               fontweight='bold', ha='left' if offset_x > 0 else 'right',
-               va='bottom' if offset_y > 0 else 'top', zorder=20)
-
-# --- ETIQUETAS DE ESLABONES ---
-# L9
-mid_L9_x = (pxP3 + pxD3)/2
-mid_L9_y = (pyP3 + pyD3)/2
-ax.text(mid_L9_x + 2, mid_L9_y + 2, 'L9', fontsize=12, fontweight='bold', color='red')
-
-# L10
-mid_L10_x = (pxIFD + pxD3)/2
-mid_L10_y = (pyIFD + pyD3)/2
-ax.text(mid_L10_x - 3, mid_L10_y, 'L10', fontsize=12, fontweight='bold', color='red')
-
-# --- ETIQUETAS DE FALANGES ---
-ax.text((origen_x + pxIFP)/2, (origen_y + pyIFP)/2 - 5, 'Fp', 
-       fontsize=10, fontstyle='italic', color=[0.3, 0.3, 0.3])
-ax.text((pxIFP + pxIFD)/2, (pyIFP + pyIFD)/2 - 5, 'Fm',
-       fontsize=10, fontstyle='italic', color=[0.3, 0.3, 0.3])
-ax.text((pxIFD + pxPF)/2, (pyIFD + pyPF)/2 - 5, 'Fd',
-       fontsize=10, fontstyle='italic', color=[0.3, 0.3, 0.3])
-
-# --- DIMENSIONES ---
-# L9
-ax.annotate('', xy=(pxD3, pyD3), xytext=(pxP3, pyP3),
-           arrowprops=dict(arrowstyle='<->', color='blue', lw=1.5))
-ax.text(mid_L9_x + 5, mid_L9_y - 3, f'{Link9:.1f} mm',
-       fontsize=9, color='blue')
-
-# L10
-ax.annotate('', xy=(pxD3, pyD3), xytext=(pxIFD, pyIFD),
-           arrowprops=dict(arrowstyle='<->', color='blue', lw=1.5))
-ax.text(mid_L10_x - 5, mid_L10_y - 3, f'{Link10:.1f} mm',
-       fontsize=9, color='blue')
-
-# --- TITULO Y CONFIGURACION FINAL ---
-ax.set_title(f'Diagrama Cinemático del Exoesqueleto con Tercer Mecanismo\n' +
-            f'Posición: θ₂ = {THETA2:.1f}°, Flexión Natural Conservada\n' +
-            f'L9 = {Link9:.1f} mm (P3 → D3), L10 = {Link10:.1f} mm (IFD → D3)',
-            fontsize=14, fontweight='bold', pad=20)
-
-ax.set_xlabel('Posición X (mm)', fontsize=12)
-ax.set_ylabel('Posición Y (mm)', fontsize=12)
-
-# Ajustar limites
-x_vals = [origen_x, pxIFP, pxIFD, pxPF, pxP, pxP2so, pxP3, pxD3, pxS1, pxS2]
-y_vals = [origen_y, pyIFP, pyIFD, pyPF, pyP, pyP2so, pyP3, pyD3, pyS1, pyS2]
-x_min = min(x_vals) - 10
-x_max = max(x_vals) + 10
-y_min = min(y_vals) - 10
-y_max = max(y_vals) + 10
-
-ax.set_xlim([x_min, x_max])
-ax.set_ylim([y_min, y_max])
-
-ax.legend(loc='upper right', fontsize=10)
+xs = [T2[0], P[0], M4[0], S1[0], S2[0], P2[0], P3[0], Pa[0], D3[0], PF[0],
+      MCF[0], IFP[0], IFD[0], G1[0], G2[0]]
+ys = [T2[1], P[1], M4[1], S1[1], S2[1], P2[1], P3[1], Pa[1], D3[1], PF[1],
+      MCF[1], IFP[1], IFD[1], G1[1], G2[1]]
+mx, my = 14, 12
+ax.set_xlim(min(xs) - mx, max(xs) + mx)
+ax.set_ylim(min(ys) - my, max(ys) + my)
 
 plt.tight_layout()
-plt.savefig('/projects/sandbox/Optmizacion_exo_3/diagrama_tercer_mecanismo.png',
-           dpi=300, bbox_inches='tight', facecolor='white')
+out = "/projects/sandbox/Optmizacion_exo_3/diagrama_tercer_mecanismo.png"
+plt.savefig(out, dpi=200, bbox_inches="tight", facecolor="white")
 plt.close()
-
-print('\n====== DIAGRAMA GENERADO ======')
-print('Archivo: diagrama_tercer_mecanismo.png')
-print('Estilo: Blanco y negro, ingenieria')
-print('Falanges: Con flexion natural (curvadas)')
-print('Eslabones: L9 y L10 correctamente conectados')
-print('================================\n')
+print("Diagrama generado:", out)
+print(f"Pose: THETA2={THETA2_diagrama} deg | THETAfm={est['THETAfm']:.2f} "
+      f"THETAfd={tm['THETAfd']:.2f}")
+print("Estilo: blanco y negro, ingenieria. Falanges con flexion natural.")
+print("Tercer mecanismo: IFP->Pa (manivela), Pa->D3 (L9=25), IFD->D3 (L10=35).")

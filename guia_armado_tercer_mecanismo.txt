@@ -10,15 +10,29 @@ mecanismos 1 y 2- para NO chocar con la palma al cerrar el puno. Aun asi, la
 geometria del 4 barras hace que la falange distal FLEXIONE hacia la palma de
 forma gradual, como un dedo natural (0 -> ~15.6 grados de flexion relativa).
 
+COMO LEER EL DIAGRAMA DE ARMADO ('diagrama_armado_tercer_mecanismo.png'):
+  - LINEA CONTINUA negra y gruesa  = ESLABON RIGIDO QUE SE FABRICA
+        (soporte/tierra S3 Pa-IFP, acoplador L9, balancin L10).
+  - LINEA PUNTEADA gris            = FALANGE DEL DEDO (hueso, NO se fabrica;
+        es el dedo del paciente: proximal, medial y distal).
+  - LINEA GRIS CLARA tenue         = pose del mecanismo EN FLEXION (referencia
+        del movimiento, no es una pieza).
+  - CIRCULO blanco con borde negro = junta de revoluta (perno/eje).
+  - TRIANGULO negro                = anclaje fijo (Pa, fijo a la falange proximal).
+  - Arco con "~161"                = angulo rigido entre balancin L10 y falange
+        distal (queda congelado en la pieza distal).
+
 INDICE:
   1. Descripcion general y topologia del tercer mecanismo
-  2. Lista completa de dimensiones
-  3. Definicion de puntos y articulaciones
-  4. Coordenadas de referencia en reposo (para arrancar el CAD)
-  5. Guia de modelado/armado en CAD paso a paso
-  6. Restricciones (constraints) y verificacion de movimiento
-  7. Como comparar el CAD contra los scripts de validacion
-  8. Notas, holguras y ajustes permitidos
+  2. Lista de piezas a fabricar (BOM) y convencion de lineas
+  3. Lista completa de dimensiones
+  4. Definicion de puntos y articulaciones
+  5. Tabla de juntas (revolutas)
+  6. Coordenadas de referencia en reposo (para arrancar el CAD)
+  7. Guia de modelado/armado en CAD paso a paso
+  8. Restricciones (constraints) y verificacion de movimiento
+  9. Como comparar el CAD contra los scripts de validacion
+ 10. Notas, holguras y ajustes permitidos
 
 ================================================================================
 1. DESCRIPCION GENERAL Y TOPOLOGIA DEL TERCER MECANISMO
@@ -62,7 +76,38 @@ falange proximal, el lazo cerrado obliga al balancin (y por tanto a la falange
 distal) a girar, produciendo la flexion gradual de la IFD.
 
 ================================================================================
-2. LISTA COMPLETA DE DIMENSIONES
+2. LISTA DE PIEZAS A FABRICAR (BOM) Y CONVENCION DE LINEAS
+================================================================================
+
+Solo se fabrican TRES eslabones rigidos nuevos (mas sus pernos). Las falanges
+son el dedo del paciente y NO se fabrican; en el diagrama van en linea PUNTEADA.
+
+  ID   PIEZA (linea CONTINUA en el diagrama)     LONGITUD   UNE LOS PUNTOS   CANT
+  ---  ---------------------------------------   --------   --------------   ----
+  S3   Soporte/tierra dorsal (anclaje Pa)        Pa-IFP     fijo a falange    1
+                                                 ~12.17 mm  proximal; lleva
+                                                            el pivote Pa
+  L9   Acoplador                                 25 mm      D3 <-> Pa          1
+  L10  Balancin (rigido con la falange distal,   35 mm      IFD <-> D3         1
+       forma angulo fijo ~161 deg con la distal)
+
+  PERNOS / EJES de revoluta (acero inox o tornilleria M2-M3):
+     - 1 en Pa  (S3 con L9)
+     - 1 en D3  (L9 con L10)
+     - 1 en IFD (L10/pieza distal con la falange medial; eje compartido)
+     (Las juntas MCF e IFP pertenecen a los mecanismos 1 y 2, ya existentes.)
+
+  La pieza distal se fabrica como UN solo cuerpo en "L abierta": un brazo es la
+  falange distal (24 mm) y el otro el balancin L10 (35 mm), con ~161 deg entre
+  ellos. Asi el offset rigido queda garantizado por la geometria de la pieza.
+
+  CONVENCION DE LINEAS (ver 'diagrama_armado_tercer_mecanismo.png'):
+     CONTINUA  -> eslabon rigido que SE FABRICA (S3, L9, L10).
+     PUNTEADA  -> falange del dedo (hueso), NO se fabrica.
+     GRIS TENUE-> pose en flexion (solo referencia del movimiento).
+
+================================================================================
+3. LISTA COMPLETA DE DIMENSIONES
 ================================================================================
 
 --- PARAMETROS ORIGINALES (sin modificar) ---
@@ -102,7 +147,7 @@ distal) a girar, produciendo la flexion gradual de la IFD.
   r3m2 (mitad L5)   = 12.5 mm
 
 ================================================================================
-3. DEFINICION DE PUNTOS Y ARTICULACIONES
+4. DEFINICION DE PUNTOS Y ARTICULACIONES
 ================================================================================
 
   MCF  - Metacarpofalangica (base del dedo). Revoluta. Punto fijo del marco.
@@ -125,7 +170,22 @@ distal) a girar, produciendo la flexion gradual de la IFD.
          por el DORSO. El angulo IFD->D3 respecto a la falange distal es ~161 deg.
 
 ================================================================================
-4. COORDENADAS DE REFERENCIA EN REPOSO (THETA2 = 0; para arrancar el CAD)
+5. TABLA DE JUNTAS (REVOLUTAS)
+================================================================================
+
+  JUNTA  UNE                                   TIPO        PERTENECE A
+  -----  -----------------------------------   ---------   ------------------
+  MCF    marco fijo  <-> falange proximal       revoluta    mecanismo 1 (existe)
+  IFP    falange proximal <-> falange medial    revoluta    mecanismo 2 (existe)
+  IFD    falange medial <-> pieza distal (L10)  revoluta    TERCER mecanismo
+  D3     balancin L10 <-> acoplador L9          revoluta    TERCER mecanismo
+  Pa     acoplador L9 <-> soporte S3            revoluta    TERCER mecanismo
+
+  Todas con eje perpendicular al plano sagital (paralelos entre si). El lazo
+  cerrado del tercer 4 barras es: Pa -> IFP -> IFD -> D3 -> Pa.
+
+================================================================================
+6. COORDENADAS DE REFERENCIA EN REPOSO (THETA2 = 0; para arrancar el CAD)
 ================================================================================
 
 Valores calculados con la cinematica real (unidades en mm). Sirven para situar
@@ -148,7 +208,7 @@ los sketches iniciales; el movimiento exacto lo da la simulacion del CAD.
   coordenadas de TODOS los puntos para cada angulo del actuador (0..132 deg).
 
 ================================================================================
-5. GUIA DE MODELADO/ARMADO EN CAD PASO A PASO
+7. GUIA DE MODELADO/ARMADO EN CAD PASO A PASO
 ================================================================================
 
 Recomendacion general: modelar cada falange como un cuerpo (body) y cada
@@ -202,7 +262,7 @@ sagital) y luego dar espesor.
       actuador a traves de los mecanismos 1 y 2).
 
 ================================================================================
-6. RESTRICCIONES (CONSTRAINTS) Y VERIFICACION DE MOVIMIENTO
+8. RESTRICCIONES (CONSTRAINTS) Y VERIFICACION DE MOVIMIENTO
 ================================================================================
 
   a) MONTAJE DORSAL: S1, S2, Pa y D3 quedan del lado DORSAL (alturas/standoff
@@ -231,7 +291,7 @@ sagital) y luego dar espesor.
      holgura (~5 mm) con la falange medial; nada cruza al lado palmar.
 
 ================================================================================
-7. COMO COMPARAR EL CAD CONTRA LOS SCRIPTS DE VALIDACION
+9. COMO COMPARAR EL CAD CONTRA LOS SCRIPTS DE VALIDACION
 ================================================================================
 
   1) Ejecutar en MATLAB/Octave:
@@ -253,10 +313,12 @@ sagital) y luego dar espesor.
      entre pasos < 5 deg => movimiento gradual).
 
   5) Referencia visual de estilo: 'diagrama_tercer_mecanismo.png' (B/N de
-     ingenieria) muestra el dedo y los tres mecanismos en una pose.
+     ingenieria) muestra el dedo y los tres mecanismos en una pose. Para el
+     ARMADO usa 'diagrama_armado_tercer_mecanismo.png', donde los eslabones que
+     SE FABRICAN van en linea continua y las falanges en linea punteada.
 
 ================================================================================
-8. NOTAS, HOLGURAS Y AJUSTES PERMITIDOS
+10. NOTAS, HOLGURAS Y AJUSTES PERMITIDOS
 ================================================================================
 
   - Movimiento esperado de la IFD: 0 -> ~15.6 grados, gradual y monotono

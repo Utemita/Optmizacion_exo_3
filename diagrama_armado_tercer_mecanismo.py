@@ -121,6 +121,32 @@ def dibujar():
     dibujar_arco(IFD, afm_dir, afd_dir, 30, "#7a3b00",
                  "ang. AUXILIAR\nTHETAauxfd=38.78\n(medial -> distal)", rtxt=40)
 
+    # --- ANGULOS INICIALES (orientacion absoluta de cada falange en reposo) ---
+    # Medidos desde la HORIZONTAL (+X) en sentido antihorario, en la pose j=0.
+    # Son la configuracion angular de partida que el CAD debe reproducir.
+    def angulo_inicial(centro, theta_abs, etiqueta, radio, lblang=None,
+                       color="#1a7f37"):
+        t = theta_abs % 360.0
+        # linea de referencia horizontal (0 grados) hacia +X y -X
+        ax.plot([centro[0] - 12, centro[0] + 20], [centro[1], centro[1]],
+                color=color, lw=0.7, ls=":", zorder=3)
+        arc = plt.matplotlib.patches.Arc(centro, 2 * radio, 2 * radio, angle=0,
+                                         theta1=0, theta2=t,
+                                         color=color, lw=1.3, zorder=4)
+        ax.add_patch(arc)
+        amid = np.radians(lblang if lblang is not None else t / 2.0)
+        ax.annotate(etiqueta,
+                    centro + (radio + 11) * np.array([np.cos(amid), np.sin(amid)]),
+                    fontsize=7.6, ha="center", va="center", color=color)
+
+    thfp0 = est0["THETAfp"]
+    thfm0 = est0["THETAfm"]
+    thfd0 = tm0["THETAfd"]
+    angulo_inicial(MCF, thfp0, f"THETAfp0={thfp0:.1f}", radio=13, lblang=92)
+    angulo_inicial(IFP, thfm0, f"THETAfm0={thfm0:.1f}", radio=9, lblang=70)
+    angulo_inicial(IFD, thfd0, f"THETAfd0={thfd0:.1f}", radio=9, lblang=80)
+
+
     # --- Articulaciones (revoluta): circulos blancos borde negro ---
     joints = {"MCF": MCF, "IFP": IFP, "IFD": IFD, "Pa": Pa, "D3": D3, "P3": P3}
     for name, p in joints.items():
@@ -166,6 +192,7 @@ def dibujar():
         Line2D([0], [0], color="black", lw=2.6, label="Eslabon rigido FABRICADO (S3, L9, L10) - linea continua"),
         Line2D([0], [0], color="#1f4e79", lw=2.6, label="Eslabon rigido del 2.o mecanismo (IFP->P3, c2) - rigido con falange medial"),
         Line2D([0], [0], color="0.45", lw=1.8, linestyle=(0, (1, 2)), label="Falange del dedo (hueso, no se fabrica) - linea punteada"),
+        Line2D([0], [0], color="#1a7f37", lw=1.3, label="Angulo INICIAL de cada falange (desde horizontal, pose de reposo)"),
         Line2D([0], [0], color="0.8", lw=1.4, label="Pose en flexion (referencia de movimiento)"),
         Line2D([0], [0], marker="o", mfc="white", mec="black", lw=0, ms=9, label="Junta de revoluta (perno)"),
         Line2D([0], [0], marker="^", color="black", lw=0, ms=10, label="Anclaje fijo a la falange proximal (Pa)"),

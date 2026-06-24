@@ -75,28 +75,51 @@ def dibujar():
 
     # Arco que evidencia el offset RIGIDO entre la barra IFP->P3 y la falange
     # medial (IFP->IFD): ambos son el MISMO cuerpo rigido (THETAauxfm fijo).
+    def arc_menor(a, b):
+        """Devuelve (theta1, theta2, theta_medio) del ARCO MENOR (<=180) que
+        va del angulo a al angulo b, dibujado CCW por matplotlib.Arc."""
+        d = ((b - a + 180) % 360) - 180
+        t1, t2 = (a, a + d) if d >= 0 else (a + d, a)
+        return t1, t2, (t1 + t2) / 2.0
+
+    def dibujar_arco(centro, ang_a, ang_b, radio, color, texto, ls="--",
+                     lw=1.2, rtxt=None, fs=7.8):
+        t1, t2, tm_ang = arc_menor(ang_a, ang_b)
+        arc = plt.matplotlib.patches.Arc(centro, radio, radio, angle=0,
+                                         theta1=t1, theta2=t2,
+                                         color=color, lw=lw, ls=ls, zorder=4)
+        ax.add_patch(arc)
+        r = rtxt if rtxt is not None else radio * 0.9 + 14
+        amid = np.radians(tm_ang)
+        ax.annotate(texto,
+                    centro + r * np.array([np.cos(amid), np.sin(amid)]),
+                    fontsize=fs, ha="center", va="center", color=color)
+
     aP3 = np.degrees(np.arctan2(P3[1] - IFP[1], P3[0] - IFP[0]))
     aFM = np.degrees(np.arctan2(IFD[1] - IFP[1], IFD[0] - IFP[0]))
-    arc2 = plt.matplotlib.patches.Arc(IFP, 26, 26, angle=0,
-                                      theta1=min(aP3, aFM), theta2=max(aP3, aFM),
-                                      color="#1f4e79", lw=1.1, ls="--", zorder=4)
-    ax.add_patch(arc2)
-    amid2 = np.radians((aP3 + aFM) / 2.0)
-    ax.annotate("offset rigido\nTHETAauxfm=51.39\n(P3 y falange medial\nson 1 solo cuerpo)",
-                IFP + 30 * np.array([np.cos(amid2), np.sin(amid2)]),
-                fontsize=7.8, ha="center", va="center", color="#1f4e79")
+    dibujar_arco(IFP, aP3, aFM, 26, "#1f4e79",
+                 "ang. AUXILIAR\nTHETAauxfm=51.39\n(IFP->P3 a falange medial,\n"
+                 "mismo cuerpo rigido)", rtxt=34)
 
     # --- Arco que marca el angulo rigido balancin<->falange distal en IFD ---
     a1 = np.degrees(np.arctan2(D3[1] - IFD[1], D3[0] - IFD[0]))
     a2 = np.degrees(np.arctan2(PF[1] - IFD[1], PF[0] - IFD[0]))
-    arc = plt.matplotlib.patches.Arc(IFD, 16, 16, angle=0,
-                                     theta1=min(a1, a2), theta2=max(a1, a2),
-                                     color="black", lw=1.2, zorder=4)
-    ax.add_patch(arc)
-    amid = np.radians((a1 + a2) / 2.0)
-    ax.annotate("angulo rigido\n~161 (balancin-distal)",
-                IFD + 18 * np.array([np.cos(amid), np.sin(amid)]),
-                fontsize=8.5, ha="center", va="center")
+    dibujar_arco(IFD, a1, a2, 16, "black",
+                 "angulo rigido\n~161 (balancin-distal)", ls="-", lw=1.2,
+                 rtxt=20, fs=8.5)
+
+    # --- Arco del angulo AUXILIAR THETAauxfd (falange medial -> distal) en IFD
+    # THETAfd_natural = THETAfm + THETAauxfd: es el offset natural en reposo
+    # entre la falange medial (IFP->IFD) y la falange distal (IFD->punta).
+    afm_dir = np.degrees(np.arctan2(IFD[1] - IFP[1], IFD[0] - IFP[0]))  # THETAfm
+    afd_dir = np.degrees(np.arctan2(PF[1] - IFD[1], PF[0] - IFD[0]))    # THETAfd
+    # Linea guia que prolonga la falange medial a traves de IFD (origen del ang.)
+    gdir = np.radians(afm_dir)
+    ax.plot([IFD[0], IFD[0] + 17 * np.cos(gdir)],
+            [IFD[1], IFD[1] + 17 * np.sin(gdir)],
+            color="#7a3b00", lw=0.8, ls=":", zorder=3)
+    dibujar_arco(IFD, afm_dir, afd_dir, 30, "#7a3b00",
+                 "ang. AUXILIAR\nTHETAauxfd=38.78\n(medial -> distal)", rtxt=40)
 
     # --- Articulaciones (revoluta): circulos blancos borde negro ---
     joints = {"MCF": MCF, "IFP": IFP, "IFD": IFD, "Pa": Pa, "D3": D3, "P3": P3}

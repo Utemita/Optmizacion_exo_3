@@ -40,18 +40,21 @@ def dibujar():
 
     MCF = est0["MCF"]; IFP = est0["IFP"]; IFD = est0["IFD"]
     PF = tm0["PF"]; D3 = tm0["D3"]; Pa = tm0["Pa"]
+    P3 = est0["P3"]   # punta del balancin de salida del 2.o mecanismo (4 barras)
 
-    fig, ax = plt.subplots(figsize=(12, 9))
+    fig, ax = plt.subplots(figsize=(13, 9.5))
     ax.set_facecolor("white")
 
     SOLID = dict(color="black", lw=2.6, solid_capstyle="round", zorder=5)
+    SOLID2 = dict(color="#1f4e79", lw=2.6, solid_capstyle="round", zorder=5)  # 2.o mec.
     DASH  = dict(color="0.45", lw=1.8, linestyle=(0, (1, 2)), zorder=3)  # punteada
     GHOST = dict(color="0.8", lw=1.4, zorder=1)
 
     # --- Pose flexionada (fantasma, para indicar el movimiento) ---
     for a, b in [(estF["MCF"], estF["IFP"]), (estF["IFP"], estF["IFD"]),
                  (estF["IFD"], tmF["PF"]), (estF["IFD"], tmF["D3"]),
-                 (tmF["D3"], tmF["Pa"]), (tmF["Pa"], estF["IFP"])]:
+                 (tmF["D3"], tmF["Pa"]), (tmF["Pa"], estF["IFP"]),
+                 (estF["IFP"], estF["P3"])]:
         ax.plot([a[0], b[0]], [a[1], b[1]], **GHOST)
 
     # --- Falanges (PUNTEADA) ---
@@ -63,6 +66,25 @@ def dibujar():
     ax.plot([Pa[0], IFP[0]], [Pa[1], IFP[1]], **SOLID)   # tierra / soporte S3
     ax.plot([D3[0], Pa[0]],  [D3[1], Pa[1]],  **SOLID)   # acoplador L9
     ax.plot([IFD[0], D3[0]], [IFD[1], D3[1]], **SOLID)   # balancin L10
+
+    # --- Barra rigida del 2.o MECANISMO: IFP -> P3 (c2) -------------------
+    # P3 NO flota: es la punta del balancin de salida del segundo 4 barras,
+    # que pivota en la IFP. Esta barra (c2 = 46.01 mm) es un cuerpo RIGIDO con
+    # la falange medial (mismo solido, offset angular fijo THETAauxfm = 51.39).
+    ax.plot([IFP[0], P3[0]], [IFP[1], P3[1]], **SOLID2)  # balancin 2.o mec (c2)
+
+    # Arco que evidencia el offset RIGIDO entre la barra IFP->P3 y la falange
+    # medial (IFP->IFD): ambos son el MISMO cuerpo rigido (THETAauxfm fijo).
+    aP3 = np.degrees(np.arctan2(P3[1] - IFP[1], P3[0] - IFP[0]))
+    aFM = np.degrees(np.arctan2(IFD[1] - IFP[1], IFD[0] - IFP[0]))
+    arc2 = plt.matplotlib.patches.Arc(IFP, 26, 26, angle=0,
+                                      theta1=min(aP3, aFM), theta2=max(aP3, aFM),
+                                      color="#1f4e79", lw=1.1, ls="--", zorder=4)
+    ax.add_patch(arc2)
+    amid2 = np.radians((aP3 + aFM) / 2.0)
+    ax.annotate("offset rigido\nTHETAauxfm=51.39\n(P3 y falange medial\nson 1 solo cuerpo)",
+                IFP + 30 * np.array([np.cos(amid2), np.sin(amid2)]),
+                fontsize=7.8, ha="center", va="center", color="#1f4e79")
 
     # --- Arco que marca el angulo rigido balancin<->falange distal en IFD ---
     a1 = np.degrees(np.arctan2(D3[1] - IFD[1], D3[0] - IFD[0]))
@@ -77,7 +99,7 @@ def dibujar():
                 fontsize=8.5, ha="center", va="center")
 
     # --- Articulaciones (revoluta): circulos blancos borde negro ---
-    joints = {"MCF": MCF, "IFP": IFP, "IFD": IFD, "Pa": Pa, "D3": D3}
+    joints = {"MCF": MCF, "IFP": IFP, "IFD": IFD, "Pa": Pa, "D3": D3, "P3": P3}
     for name, p in joints.items():
         ax.plot(p[0], p[1], "o", mfc="white", mec="black", ms=9,
                 mew=1.6, zorder=6)
@@ -86,7 +108,7 @@ def dibujar():
 
     # --- Etiquetas de puntos ---
     off = {"MCF": (6, -14), "IFP": (-4, 12), "IFD": (8, -14),
-           "Pa": (-30, 6), "D3": (6, 8)}
+           "Pa": (-30, 6), "D3": (6, 8), "P3": (8, 4)}
     for name, p in joints.items():
         dx, dy = off[name]
         ax.annotate(name, p, textcoords="offset points", xytext=(dx, dy),
@@ -103,6 +125,9 @@ def dibujar():
                 textcoords="offset points", xytext=(10, -2), fontsize=9.5)
     ax.annotate("S3 / tierra\nPa-IFP ~12.17", mid(Pa, IFP),
                 textcoords="offset points", xytext=(-4, -28), fontsize=9.5)
+    ax.annotate("c2 = 46.01\n(balancin 2.o mec.,\nrigido -> P3 no flota)", mid(IFP, P3),
+                textcoords="offset points", xytext=(8, -6), fontsize=9,
+                color="#1f4e79")
     ax.annotate("falange proximal (fp=49)", mid(MCF, IFP),
                 textcoords="offset points", xytext=(-30, -22), fontsize=8.5,
                 color="0.3")
@@ -116,6 +141,7 @@ def dibujar():
     # --- Leyenda con la convencion de lineas ---
     leg = [
         Line2D([0], [0], color="black", lw=2.6, label="Eslabon rigido FABRICADO (S3, L9, L10) - linea continua"),
+        Line2D([0], [0], color="#1f4e79", lw=2.6, label="Eslabon rigido del 2.o mecanismo (IFP->P3, c2) - rigido con falange medial"),
         Line2D([0], [0], color="0.45", lw=1.8, linestyle=(0, (1, 2)), label="Falange del dedo (hueso, no se fabrica) - linea punteada"),
         Line2D([0], [0], color="0.8", lw=1.4, label="Pose en flexion (referencia de movimiento)"),
         Line2D([0], [0], marker="o", mfc="white", mec="black", lw=0, ms=9, label="Junta de revoluta (perno)"),
@@ -130,10 +156,10 @@ def dibujar():
                  fontsize=12)
 
     # Margenes
-    xs = [MCF[0], IFP[0], IFD[0], PF[0], D3[0], Pa[0],
-          estF["IFD"][0], tmF["PF"][0], tmF["D3"][0]]
-    ys = [MCF[1], IFP[1], IFD[1], PF[1], D3[1], Pa[1],
-          estF["IFD"][1], tmF["PF"][1], tmF["D3"][1]]
+    xs = [MCF[0], IFP[0], IFD[0], PF[0], D3[0], Pa[0], P3[0],
+          estF["IFD"][0], tmF["PF"][0], tmF["D3"][0], estF["P3"][0]]
+    ys = [MCF[1], IFP[1], IFD[1], PF[1], D3[1], Pa[1], P3[1],
+          estF["IFD"][1], tmF["PF"][1], tmF["D3"][1], estF["P3"][1]]
     m = 18
     ax.set_xlim(min(xs) - m, max(xs) + m)
     ax.set_ylim(min(ys) - m, max(ys) + m)

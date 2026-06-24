@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')   # backend headless (sin pantalla)
 import matplotlib.pyplot as plt
 import pandas as pd
 import optuna
@@ -6,8 +8,20 @@ from scipy.optimize import differential_evolution
 from scipy.spatial.distance import cdist
 from scipy.signal import savgol_filter
 import time
+import os
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+# Presupuesto de optimizacion (configurable por variables de entorno para poder
+# hacer corridas rapidas de prueba sin tocar el codigo; los valores por defecto
+# son los exhaustivos).
+N_TRIALS_OPTUNA   = int(os.environ.get('OPT_TRIALS', '8'))
+DE_MAXITER        = int(os.environ.get('OPT_MAXITER', '1500'))
+DE_MAXITER_OPTUNA = int(os.environ.get('OPT_MAXITER_OPTUNA', '20'))
+
+# Tope fisiologico de la flexion distal relativa (DIP) en grados. Las
+# soluciones con un ROM de DIP mayor se descartan por irreales.
+DIP_MAX_DEG = float(os.environ.get('DIP_MAX_DEG', '35.0'))
 
 # ==============================================================================
 # --- 1. PARAMETROS ANTROPOMETRICOS (longitudes de falanges reales) ---
@@ -80,6 +94,12 @@ mocap_pts = {
     'ifd': np.column_stack((pxIFD_mocap, pyIFD_mocap)),
     'tip': np.column_stack((pxPF_mocap,  pyPF_mocap))
 }
+
+# Perfil REAL del angulo articular DIP (variacion respecto a la pose inicial).
+# dip_smooth es el angulo articular distal-medial del dedo real; su variacion
+# se usa para que el tercer mecanismo reproduzca la flexion distal fisiologica
+# (y NO una flexion exagerada que solo encaje la punta geometricamente).
+dip_rel_mocap = dip_smooth - dip_smooth[0]
 
 # Rango de entrada de la manivela principal (0 -> 85 grados), igual que antes
 theta_input = np.linspace(0, np.deg2rad(85), N_PUNTOS)
@@ -169,18 +189,54 @@ def solve_four_bar(a, b, c, d, theta2, theta1):
     # Configuracion abierta (signo -)
     return 2*np.arctan((-B1 - np.sqrt(disc)) / (2*A1))
 
+def _circle_intersections(c0, r0, c1, r1):
+    """Interseccion de dos circulos (centros c0,c1 y radios r0,r1).
+
+    Se usa para resolver el tercer mecanismo de 4 barras: el punto D3 esta a
+    distancia Link9_3 del anclaje Pa y a distancia Link10_3 de la IFD, por lo
+    que es una de las intersecciones de ambos circulos.
+    Devuelve (sol_a, sol_b) con sol_b = rama '-perp' (lado dorsal), o None si
+    los circulos no se cortan (el mecanismo no ensambla en esa pose).
+    """
+    c0 = np.asarray(c0, dtype=float)
+    c1 = np.asarray(c1, dtype=float)
+    dvec = c1 - c0
+    dist = np.hypot(dvec[0], dvec[1])
+    if dist > (r0 + r1) or dist < abs(r0 - r1) or dist == 0:
+        return None
+    aa = (r0**2 - r1**2 + dist**2) / (2 * dist)
+    hh2 = r0**2 - aa**2
+    if hh2 < 0:
+        return None
+    hh = np.sqrt(hh2)
+    pm = c0 + aa * dvec / dist
+    perp = np.array([-dvec[1], dvec[0]]) / dist
+    return pm + hh * perp, pm - hh * perp
+
 # ==============================================================================
 # --- 5. MODELO CINEMATICO ---
 # ==============================================================================
 def run_kinematics(p, th_input):
+    # 17 parametros originales (dos 5 barras + dos 4 barras) + 4 parametros
+    # NUEVOS del tercer mecanismo de 4 barras que da movimiento real a la IFD:
+    #   Link9_3  : acoplador (D3 -> Pa)
+    #   Link10_3 : balancin  (IFD -> D3, rigido con la falange distal)
+    #   back3_3  : desplazamiento del soporte S3 a lo largo de la falange
+    #              proximal (NEGATIVO = el soporte se adelanta pasando la IFP)
+    #   up3_3    : standoff DORSAL del soporte S3 (perfil bajo)
     (Bancada1, Bancada2, Link1, Link2, Link3, Link4, Link5,
      Link6, Link7, Link8, Link10, hsp, dsp,
-     theta_aux_fm, theta_aux_fd, gear_ratio, theta_offset) = p
+     theta_aux_fm, theta_aux_fd, gear_ratio, theta_offset,
+     Link9_3, Link10_3, back3_3, up3_3) = p
 
     # Validaciones basicas
     if gear_ratio <= 0:
         return None
-    if min(p[:11]) <= 0.005:   # longitudes de eslabon minimas
+    if min(p[:11]) <= 0.005:   # longitudes de eslabon minimas (11 primeros)
+        return None
+    if Link9_3 <= 0.005 or Link10_3 <= 0.005:  # eslabones del tercer mecanismo
+        return None
+    if up3_3 <= 0:             # el standoff dorsal debe ser positivo
         return None
     if hsp <= 0 or dsp <= 0:
         return None
@@ -201,8 +257,11 @@ def run_kinematics(p, th_input):
     PXifp, PYifp = [], []
     PXifd, PYifd = [], []
     PXtip, PYtip = [], []
+    TH_FM, TH_FD = [], []   # angulos de falange medial y distal (diagnostico/ROM)
 
-    prev_theta_fm = None  # para detectar reversiones en theta_fm
+    prev_theta_fm = None    # para detectar reversiones en theta_fm
+    gamma_bracket3 = None   # offset del soporte S3 (se calibra en el 1er paso)
+    dorsal_sign3   = None   # lado dorsal del tercer mecanismo (se fija 1 vez)
 
     for th2 in th_input:
         th1 = (th2 / gear_ratio) + theta_offset
@@ -260,16 +319,15 @@ def run_kinematics(p, th_input):
         if theta4m2 is None:
             return None
 
-        # Angulos de las falanges medial y distal
+        # Angulo de la falange medial (igual que antes)
         theta_fm = theta4m2 + theta_aux_fm
-        theta_fd = theta_fm + theta_aux_fd
 
         # -----------------------------------------------------------------
         # RESTRICCION FISICA ANTI-GANCHO:
-        # En un dedo real realizando un agarre, los angulos de las falanges
-        # medial y distal deben ser MONOTONOS (nunca retroceden) a lo largo
-        # del movimiento de cierre. Si theta_fm retrocede respecto al paso
-        # anterior, la solucion no es fisicamente realizable y se descarta.
+        # En un dedo real realizando un agarre, el angulo de la falange medial
+        # debe ser MONOTONO (nunca retrocede) a lo largo del cierre. Si theta_fm
+        # retrocede respecto al paso anterior, la solucion no es fisicamente
+        # realizable y se descarta.
         # -----------------------------------------------------------------
         if prev_theta_fm is not None:
             delta_fm = (theta_fm - prev_theta_fm + np.pi) % (2*np.pi) - np.pi
@@ -278,9 +336,53 @@ def run_kinematics(p, th_input):
                 return None   # retroceso -> solucion no valida
         prev_theta_fm = theta_fm
 
-        # Posiciones cartesianas
+        # Posicion de la articulacion IFD (extremo de la falange medial)
         px_ifd = FM_REAL * np.cos(theta_fm) + px_ifp
         py_ifd = FM_REAL * np.sin(theta_fm) + py_ifp
+
+        # -----------------------------------------------------------------
+        # TERCER MECANISMO DE 4 BARRAS (cinematica REAL de la IFD/DIP)
+        # -----------------------------------------------------------------
+        # Antes la distal usaba un offset CONSTANTE (theta_fd = theta_fm +
+        # theta_aux_fd), por lo que se movia rigida con la medial. Ahora el
+        # angulo distal lo entrega un 4 barras real:
+        #   - Tierra:    Pa -> IFP   (soporte S3 rigido a la falange proximal)
+        #   - Manivela:  IFP -> IFD  (la propia falange medial, FM_REAL)
+        #   - Balancin:  IFD -> D3   (Link10_3, rigido con la falange distal)
+        #   - Acoplador: D3  -> Pa   (Link9_3), por el lado DORSAL
+        # El offset theta_aux_fd ahora solo fija la flexion natural en reposo
+        # (via gamma_bracket3, calibrado en el 1er paso); la EVOLUCION del
+        # angulo distal la determina la geometria del 4 barras -> flexion DIP
+        # gradual, como un dedo real.
+        prox_dir  = np.array([np.cos(theta_fp), np.sin(theta_fp)])
+        prox_norm = np.array([-prox_dir[1], prox_dir[0]])
+        IFP_pt = np.array([px_ifp, py_ifp])
+        IFD_pt = np.array([px_ifd, py_ifd])
+
+        # Lado dorsal: se fija UNA sola vez usando el lado de P3 (el resto del
+        # exoesqueleto va por el dorso). P3 = extremo del balancin del 2do 4B.
+        if dorsal_sign3 is None:
+            P3_pt = IFP_pt + Link10 * np.array([np.cos(theta4m2), np.sin(theta4m2)])
+            dorsal_sign3 = 1.0 if np.dot(P3_pt - IFP_pt, prox_norm) >= 0 else -1.0
+        dorsal_norm = dorsal_sign3 * prox_norm
+
+        # Anclaje del acoplador, fijo a la falange proximal (soporte S3).
+        Pa = IFP_pt - back3_3 * prox_dir + up3_3 * dorsal_norm
+
+        sols = _circle_intersections(Pa, Link9_3, IFD_pt, Link10_3)
+        if sols is None:
+            return None          # el tercer mecanismo no ensambla en esta pose
+        D3 = sols[1]             # rama dorsal ('-perp')
+        ang_rocker = np.arctan2(D3[1] - py_ifd, D3[0] - px_ifd)
+
+        # Calibrar gamma_bracket3 en el 1er paso ensamblable para conservar la
+        # flexion natural inicial (theta_fm + theta_aux_fd).
+        if gamma_bracket3 is None:
+            gamma_bracket3 = (theta_fm + theta_aux_fd) - ang_rocker
+
+        theta_fd = ang_rocker + gamma_bracket3
+
+        # Posicion de la punta (extremo de la falange distal)
         px_tip = FD_REAL * np.cos(theta_fd) + px_ifd
         py_tip = FD_REAL * np.sin(theta_fd) + py_ifd
 
@@ -292,11 +394,24 @@ def run_kinematics(p, th_input):
         PXifp.append(px_ifp); PYifp.append(py_ifp)
         PXifd.append(px_ifd); PYifd.append(py_ifd)
         PXtip.append(px_tip); PYtip.append(py_tip)
+        TH_FM.append(theta_fm); TH_FD.append(theta_fd)
+
+    # -----------------------------------------------------------------
+    # RESTRICCION FISIOLOGICA DE LA FLEXION DISTAL (DIP):
+    # La flexion relativa de la IFD a lo largo del cierre no puede exceder un
+    # maximo plausible (~35 deg). Evita soluciones que abusan del tercer
+    # mecanismo con una flexion distal irreal solo para encajar la punta.
+    # -----------------------------------------------------------------
+    dip_rel = np.unwrap(np.asarray(TH_FD)) - np.unwrap(np.asarray(TH_FM))
+    if np.ptp(dip_rel) > np.deg2rad(DIP_MAX_DEG):
+        return None
 
     return {
         'ifp': np.column_stack((PXifp, PYifp)),
         'ifd': np.column_stack((PXifd, PYifd)),
-        'tip': np.column_stack((PXtip, PYtip))
+        'tip': np.column_stack((PXtip, PYtip)),
+        'theta_fm': np.asarray(TH_FM),
+        'theta_fd': np.asarray(TH_FD)
     }
 
 # ==============================================================================
@@ -309,6 +424,15 @@ W_TIP = 0.375
 
 # Peso de la penalizacion de monotonicidad (escala en metros)
 W_MONO = 5.0
+
+# Peso de la penalizacion del PERFIL ANGULAR de la IFD/DIP.
+# Obliga a que el angulo distal del exo (theta_fd - theta_fm) siga el perfil
+# real de la DIP del mocap, evitando que el tercer mecanismo produzca una
+# flexion distal exagerada (no fisiologica) con tal de encajar la punta.
+# El error angular (rad) se convierte a metros multiplicando por FD_REAL
+# (desplazamiento equivalente en la punta), para ser comparable al chamfer.
+# Configurable por entorno para calibrar el balance forma/DIP.
+W_DIP = float(os.environ.get('W_DIP', '0.3'))
 
 def fitness_function(p):
     sim_data = run_kinematics(p, theta_input)
@@ -330,10 +454,18 @@ def fitness_function(p):
     mono_ifd = monotonicity_penalty(aligned['ifd'])
     mono_tip = monotonicity_penalty(aligned['tip'])
 
+    # Penalizacion del perfil angular de la IFD: el angulo distal del exo
+    # (theta_fd - theta_fm) debe seguir la variacion real de la DIP del mocap.
+    # La rotacion de alineacion rigida se cancela en la DIFERENCIA de angulos.
+    exo_dip     = np.unwrap(sim_data['theta_fd']) - np.unwrap(sim_data['theta_fm'])
+    exo_dip_rel = exo_dip - exo_dip[0]
+    dip_error   = FD_REAL * np.mean(np.abs(exo_dip_rel - dip_rel_mocap))
+
     shape_error = W_IFP*err_ifp + W_IFD*err_ifd + W_TIP*err_tip
     mono_error  = W_MONO * (mono_ifd + mono_tip)
+    dip_pen     = W_DIP * dip_error
 
-    return shape_error + mono_error
+    return shape_error + mono_error + dip_pen
 
 # ==============================================================================
 # --- 7. BOUNDS ---
@@ -351,7 +483,12 @@ bounds = [
     (0.005, 0.035), (0.005, 0.023),                 # hsp, dsp  (dsp < 0.0245 para r1m2 > 0)
     (0.0,   np.pi), (0.0,  np.pi),                 # theta_aux_fm, theta_aux_fd
     (1.0,   8.0),                                   # gear_ratio
-    (-np.pi, np.pi)                                 # theta_offset
+    (-np.pi, np.pi),                                # theta_offset
+    # --- Tercer mecanismo de 4 barras (cinematica IFD/DIP) ---
+    (0.010, 0.050),                                 # Link9_3  acoplador (max 50mm)
+    (0.010, 0.050),                                 # Link10_3 balancin  (max 50mm)
+    (-0.030, 0.010),                                # back3_3  (neg = soporte adelantado)
+    (0.001, 0.015)                                  # up3_3    standoff dorsal (1-15mm)
 ]
 
 # ==============================================================================
@@ -369,7 +506,7 @@ def objective_optuna(trial):
         fitness_function, bounds,
         strategy=strategy, popsize=popsize,
         mutation=(mut_min, mut_max), recombination=recombination,
-        maxiter=20, tol=1e-3, polish=False,
+        maxiter=DE_MAXITER_OPTUNA, tol=1e-3, polish=False,
         updating='immediate', workers=1
     )
     return res.fun
@@ -379,11 +516,14 @@ def objective_optuna(trial):
 # ==============================================================================
 if __name__ == '__main__':
     # Quick validation with MATLAB-equivalent parameters (converted to meters)
+    # Incluye los 4 parametros del tercer mecanismo con los valores ORIGINALES
+    # del disenador (Link9=25mm, Link10=35mm, back3=-12mm, up3=2mm).
     p_matlab = [0.018, 0.020, 0.035, 0.049, 0.025, 0.020, 0.025,
                 0.055, 0.035, 0.052, 0.04601,
                 0.017, 0.018,
                 np.deg2rad(51.39), np.deg2rad(38.78),
-                2.0, np.deg2rad(109)]
+                2.0, np.deg2rad(109),
+                0.025, 0.035, -0.012, 0.002]
     test_result = run_kinematics(p_matlab, theta_input)
     if test_result is not None:
         print(">> VALIDACION: Cinematica con parametros MATLAB - OK")
@@ -399,7 +539,7 @@ if __name__ == '__main__':
 
     study = optuna.create_study(direction='minimize')
     t0 = time.time()
-    study.optimize(objective_optuna, n_trials=8)
+    study.optimize(objective_optuna, n_trials=N_TRIALS_OPTUNA)
     best_hp = study.best_params
     print(f'\n>> Optuna finalizado en {time.time()-t0:.1f}s')
     print(f'   Mejor estrategia : {best_hp["strategy"]}')
@@ -415,7 +555,7 @@ if __name__ == '__main__':
         popsize=best_hp['popsize'],
         mutation=(best_hp['mut_min'], best_hp['mut_max']),
         recombination=best_hp['recombination'],
-        maxiter=1500, tol=1e-5,
+        maxiter=DE_MAXITER, tol=1e-5,
         polish=True, disp=True,
         updating='immediate', workers=1
     )
@@ -458,10 +598,12 @@ if __name__ == '__main__':
         "Link3 (m)",               "Link4 (m)",
         "Link5 (m)",               "Link6 (m)",
         "Link7 (m)",               "Link8 (m)",
-        "Link10 (m)",
+        "Link10 / c2 (m)",
         "hsp (m)",                 "dsp (m)",
         "Theta Aux FM (rad)",      "Theta Aux FD (rad)",
-        "Relacion de engranaje",   "Theta Offset (rad)"
+        "Relacion de engranaje",   "Theta Offset (rad)",
+        "Link9_3  acoplador (m)",  "Link10_3 balancin (m)",
+        "back3_3  soporte (m)",    "up3_3    standoff (m)"
     ]
 
     print('>> PARAMETROS DIMENSIONALES DEL MECANISMO')
@@ -472,6 +614,22 @@ if __name__ == '__main__':
     print(f'   Traslacion X : {t_opt[0]*1000:.2f} mm')
     print(f'   Traslacion Y : {t_opt[1]*1000:.2f} mm')
     print(f'   Rotacion Base: {angulo_montaje:.2f} deg')
+
+    # --- Tercer mecanismo de 4 barras (cinematica IFD/DIP) ---
+    print('\n>> TERCER MECANISMO DE 4 BARRAS (IFD/DIP) [mm]')
+    print(f'   Link9_3  acoplador (D3->Pa)   : {p_opt[17]*1000:.2f} mm')
+    print(f'   Link10_3 balancin  (IFD->D3)  : {p_opt[18]*1000:.2f} mm')
+    print(f'   back3_3  soporte S3 (a lo largo): {p_opt[19]*1000:.2f} mm')
+    print(f'   up3_3    standoff dorsal       : {p_opt[20]*1000:.2f} mm')
+
+    # Rango de movimiento RELATIVO de la IFD (flexion distal gradual real).
+    # Se desenrollan los angulos (np.unwrap) para evitar saltos de +-360 deg.
+    rel_dip_deg = np.rad2deg(np.unwrap(best_sim['theta_fd'])
+                             - np.unwrap(best_sim['theta_fm']))
+    rel_dip_rel = rel_dip_deg - rel_dip_deg[0]   # respecto a la pose inicial
+    print(f'\n   Flexion distal relativa IFD: '
+          f'min={rel_dip_rel.min():+.2f} deg, max={rel_dip_rel.max():+.2f} deg, '
+          f'ROM={rel_dip_rel.max()-rel_dip_rel.min():.2f} deg (movimiento gradual)')
     print('====================================================\n')
 
     # --- Grafica de resultados ---
@@ -507,7 +665,9 @@ if __name__ == '__main__':
 
     # --- Guardado ---
     np.savetxt("Parametros_Optimizados_Pinza_Fina.txt", p_opt,
-               header="Eslabones y offsets optimizados (17 parametros) - Pinza Fina")
+               header="Eslabones y offsets optimizados (21 parametros) - Pinza Fina. "
+                      "Indices 0-16: mecanismo original; 17=Link9_3, 18=Link10_3, "
+                      "19=back3_3, 20=up3_3 (tercer mecanismo de 4 barras IFD/DIP)")
 
     if len(mocap_pts['ifp']) == len(sim_aligned['ifp']):
         pd.DataFrame({
